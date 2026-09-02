@@ -41,7 +41,9 @@ async function ask(text = question.value) {
       id: Date.now() + 1,
       role: 'assistant',
       text: result.answer,
-      source: `AI 回答 · ${result.model || 'DeepSeek'}`
+      source: result.sources?.length
+        ? `参考：${result.sources.map(source => `${source.title}（${source.department}）`).join('；')}`
+        : `AI 回答 · ${result.model || 'DeepSeek'} · 知识库未命中`
     })
   } catch (error) {
     serviceError.value = error.message
@@ -91,7 +93,7 @@ function handleKeydown(event) {
 
         <aside class="panel">
           <section class="card"><h2>常见问题</h2><div class="quick"><button v-for="item in quickQuestions" :key="item" @click="ask(item)">{{ item }}</button></div></section>
-          <section class="card"><h2>服务概况</h2><div class="metric"><span>AI 服务</span><strong>DeepSeek API</strong></div><div class="metric"><span>政策知识库</span><strong>待接入</strong></div><div class="metric"><span>对话模式</span><strong>支持多轮</strong></div></section>
+          <section class="card"><h2>服务概况</h2><div class="metric"><span>AI 服务</span><strong>DeepSeek API</strong></div><div class="metric"><span>政策知识库</span><strong>江苏 30 份</strong></div><div class="metric"><span>对话模式</span><strong>检索增强</strong></div></section>
         </aside>
       </div>
     </main>
