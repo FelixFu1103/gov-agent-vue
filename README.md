@@ -6,8 +6,9 @@
 npm install
 npm run build
 
-# 配置服务端密钥（不要提交 .env）
-export DEEPSEEK_API_KEY="你的 DeepSeek API Key"
+# 创建本地密钥文件（.env 已被 Git 忽略）
+cp .env.example .env
+# 然后打开 .env，把占位内容替换成你的 DeepSeek API Key
 npm run dev
 ```
 
@@ -17,7 +18,7 @@ npm run dev
 
 ```bash
 npm run build
-DEEPSEEK_API_KEY="你的 DeepSeek API Key" npm start
+npm start
 ```
 
 可选环境变量：
