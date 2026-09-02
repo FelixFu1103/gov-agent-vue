@@ -1,17 +1,62 @@
 import { createServer } from 'node:http'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { extname, join, normalize, resolve } from 'node:path'
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
 const model = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
+const knowledgeRoot = resolve('knowledge/documents')
 
 const instructions = `你是政务服务智能咨询助手。
 请使用简洁、准确、易懂的中文回答。
-当前尚未接入权威政务知识库，因此不得声称某项政策一定有效，也不得编造法规、办理材料、时限或主管部门。
+你会收到从江苏政务知识库检索出的参考资料。只能依据这些资料陈述政务事项；不得编造法规、办理材料、费用、时限或主管部门。
 涉及地区差异时先询问用户所在省市；涉及个人办件、身份信息、法律结论或重大权益时，提醒用户以当地政府官网和主管部门答复为准。
 不得要求用户提供身份证号、银行卡号、密码、验证码等敏感信息。
-如果没有可靠依据，要明确说明不确定，并告诉用户应该向哪个类型的官方部门核实。`
+如果资料只证明官方门户存在某事项、但不包含具体材料或时限，必须明确说明，并引导用户通过给出的官方来源核验。没有相关资料时要明确说明知识库暂未覆盖。`
+
+function parseDocument(filename, raw) {
+  const [, header = '', body = raw] = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/) || []
+  const metadata = Object.fromEntries(header.split('\n').filter(Boolean).map(line => {
+    const splitAt = line.indexOf(':')
+    return [line.slice(0, splitAt).trim(), line.slice(splitAt + 1).trim()]
+  }))
+  return { filename, ...metadata, body: body.trim() }
+}
+
+async function loadKnowledge() {
+  try {
+    const files = (await readdir(knowledgeRoot)).filter(file => file.endsWith('.md')).sort()
+    return Promise.all(files.map(async filename => parseDocument(filename, await readFile(join(knowledgeRoot, filename), 'utf8'))))
+  } catch (error) {
+    console.error('Knowledge base load failed:', error?.message)
+    return []
+  }
+}
+
+const knowledgeDocuments = await loadKnowledge()
+
+function searchKnowledge(query, limit = 4) {
+  const normalized = query.toLowerCase().replace(/\s+/g, '')
+  const terms = new Set([
+    ...query.toLowerCase().split(/[\s，。！？、；：,.!?;:（）()]+/).filter(term => term.length > 1),
+    ...Array.from({ length: Math.max(0, normalized.length - 1) }, (_, index) => normalized.slice(index, index + 2))
+  ])
+  return knowledgeDocuments
+    .map(document => {
+      const title = `${document.title || ''}${document.topic || ''}${document.department || ''}`.toLowerCase()
+      const text = `${title}${document.body}`.toLowerCase()
+      let score = 0
+      for (const term of terms) {
+        if (title.includes(term)) score += 4
+        else if (text.includes(term)) score += 1
+      }
+      return { document, score }
+    })
+    .filter(result => result.score >= 2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(result => result.document)
+}
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -63,12 +108,16 @@ async function handleChat(request, response) {
       .slice(-10)
       .map(item => ({ role: item.role, content: item.content.slice(0, 4_000) }))
     : []
+  const matches = searchKnowledge(message)
+  const context = matches.length
+    ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n部门：${document.department}\n地区：${document.region}\n核验日期：${document.verified_at}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
+    : '未检索到相关的本地知识库资料。'
   const payload = {
     model,
     messages: [
       { role: 'system', content: instructions },
       ...history,
-      { role: 'user', content: message }
+      { role: 'user', content: `本次检索资料：\n${context}\n\n用户问题：${message}` }
     ],
     stream: false,
     max_tokens: 900
@@ -94,7 +143,11 @@ async function handleChat(request, response) {
     const answer = result.choices?.[0]?.message?.content?.trim()
 
     if (!answer) return sendJson(response, 502, { error: 'AI 未返回可显示的回答' })
-    return sendJson(response, 200, { answer, model: result.model || model })
+    return sendJson(response, 200, {
+      answer,
+      model: result.model || model,
+      sources: matches.map(document => ({ title: document.title, department: document.department, url: document.source }))
+    })
   } catch (error) {
     console.error('Chat request failed:', error?.name)
     return sendJson(response, 502, { error: '连接 AI 服务失败，请稍后重试' })
@@ -128,7 +181,7 @@ async function serveStatic(request, response) {
 createServer(async (request, response) => {
   if (request.method === 'POST' && request.url === '/api/chat') return handleChat(request, response)
   if (request.method === 'GET' && request.url === '/api/health') {
-    return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model })
+    return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model, knowledgeDocuments: knowledgeDocuments.length })
   }
   if (request.method === 'GET' || request.method === 'HEAD') return serveStatic(request, response)
   return sendJson(response, 405, { error: '不支持的请求方法' })
