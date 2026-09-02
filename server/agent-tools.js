@@ -136,7 +136,11 @@ export function getSessionState(conversationId) {
   return state || null
 }
 
-export function search_policy({ documents, query, limit = 3 }) {
+export async function search_policy({ documents, query, limit = 3, databaseSearch }) {
+  if (databaseSearch) {
+    const results = await databaseSearch(query, limit)
+    if (results.length) return results
+  }
   return searchKnowledge(documents, query, limit).map(document => ({
     documentId: document.filename,
     title: document.title,
@@ -186,14 +190,14 @@ export function generate_material_checklist({ intent, slots }) {
   return { intent, items: lists[intent] || [], note: '特殊情形可能需要补充材料，以参保地一次性告知为准。' }
 }
 
-export async function runAgentTools({ conversationId, message, history, documents }) {
+export async function runAgentTools({ conversationId, message, history, documents, databaseSearch }) {
   const previous = getSessionState(conversationId)
   const intentResult = classify_intent({ message, previousIntent: previous?.intent })
   const slots = extract_slots({ message, history, existingSlots: previous?.slots })
   const state = update_session_state({ conversationId, intentResult, slots })
   const slotCheck = check_required_slots({ intent: state.intent, slots: state.slots })
   const query = buildRetrievalQuery(history, message)
-  const policies = search_policy({ documents, query })
+  const policies = await search_policy({ documents, query, databaseSearch })
   const guide = get_service_guide({ documents, intent: state.intent })
   const evidence = assess_evidence({ intent: state.intent, guide, slots: state.slots })
   const checklist = generate_material_checklist({ intent: state.intent, slots: state.slots })

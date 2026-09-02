@@ -60,10 +60,20 @@ test('updates state without losing previous slots', () => {
   assert.deepEqual(state.slots, { insured_city: '南京', medical_city: '上海' })
 })
 
-test('searches policy and loads the structured guide', () => {
-  const policies = search_policy({ documents, query: '跨省异地住院备案' })
+test('searches policy and loads the structured guide', async () => {
+  const policies = await search_policy({ documents, query: '跨省异地住院备案' })
   assert.equal(policies[0].documentId, '10-cross-region-medical.md')
   assert.equal(get_service_guide({ documents, intent: 'cross_region_medical_filing' })?.filename, '10-cross-region-medical.md')
+})
+
+test('prefers database retrieval when the vector store is available', async () => {
+  const databaseResult = [{ documentId: 'db-policy', title: '数据库政策', body: '数据库片段', source: 'https://example.gov.cn' }]
+  const policies = await search_policy({
+    documents,
+    query: '异地就医',
+    databaseSearch: async () => databaseResult
+  })
+  assert.deepEqual(policies, databaseResult)
 })
 
 test('assesses evidence and generates a personalized checklist', () => {

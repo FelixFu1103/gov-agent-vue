@@ -9,10 +9,14 @@
     "dev:api": "node --env-file-if-exists=.env --watch server/index.js",
     "build": "vite build",
     "test": "node --test",
+    "db:start": "docker compose up -d postgres",
+    "db:stop": "docker compose down",
+    "db:ingest": "node --env-file-if-exists=.env scripts/ingest-knowledge.mjs",
     "preview": "vite preview",
     "start": "node --env-file-if-exists=.env server/index.js"
   },
   "dependencies": {
+    "pg": "^8.23.0",
     "vue": "^3.5.0"
   },
   "devDependencies": {

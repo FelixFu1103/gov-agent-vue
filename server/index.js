@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize, resolve } from 'node:path'
 import { loadKnowledge } from './knowledge.js'
 import { agentToolDefinitions, runAgentTools } from './agent-tools.js'
+import { createKnowledgeDatabase } from './database.js'
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
@@ -30,6 +31,14 @@ try {
   knowledgeDocuments = await loadKnowledge(knowledgeRoot)
 } catch (error) {
   console.error('Knowledge base load failed:', error?.message)
+}
+
+let knowledgeDatabase = null
+try {
+  knowledgeDatabase = await createKnowledgeDatabase()
+  if (knowledgeDatabase) console.log('Knowledge database connected')
+} catch (error) {
+  console.warn('Knowledge database unavailable, using Markdown fallback:', error.message)
 }
 
 const mimeTypes = {
@@ -99,10 +108,16 @@ async function handleChat(request, response) {
       .slice(-10)
       .map(item => ({ role: item.role, content: item.content.slice(0, 4_000) }))
     : []
-  const agent = await runAgentTools({ conversationId, message, history, documents: knowledgeDocuments })
-  const matches = agent.guide ? [agent.guide] : agent.policies.slice(0, 1).map(policy => knowledgeDocuments.find(document => document.filename === policy.documentId)).filter(Boolean)
+  const agent = await runAgentTools({
+    conversationId,
+    message,
+    history,
+    documents: knowledgeDocuments,
+    databaseSearch: knowledgeDatabase?.search
+  })
+  const matches = agent.policies.slice(0, 1)
   const context = matches.length
-    ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n部门：${document.department}\n地区：${document.region}\n核验日期：${document.verified_at}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
+    ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n部门：${document.department}\n地区：${document.region}\n核验日期：${document.verifiedAt}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
     : '未检索到相关的本地知识库资料。'
   const payload = {
     model,
@@ -185,7 +200,8 @@ async function serveStatic(request, response) {
 createServer(async (request, response) => {
   if (request.method === 'POST' && request.url === '/api/chat') return handleChat(request, response)
   if (request.method === 'GET' && request.url === '/api/health') {
-    return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model, knowledgeDocuments: knowledgeDocuments.length, agentTools: agentToolDefinitions })
+    const database = knowledgeDatabase ? await knowledgeDatabase.health() : { connected: false, documents: 0, vectorEnabled: false }
+    return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model, knowledgeDocuments: knowledgeDocuments.length, database, agentTools: agentToolDefinitions })
   }
   if (request.method === 'GET' || request.method === 'HEAD') return serveStatic(request, response)
   return sendJson(response, 405, { error: '不支持的请求方法' })
