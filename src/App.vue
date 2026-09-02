@@ -9,7 +9,7 @@ const messages = ref([
   { id: 1, role: 'assistant', text: '您好，我是政务服务智能助手。您可以咨询社保、公积金、户籍、企业开办等事项。请告诉我您想办理什么业务？' }
 ])
 
-const quickQuestions = ['办理营业执照需要什么材料？', '社保转移如何办理？', '异地身份证到期怎么换领？', '公积金提取有哪些条件？']
+const quickQuestions = ['单位给员工办理职工医保需要什么材料？', '没有工作怎么参加居民医保？', '去外省看病如何备案？', '住院没有直接结算怎么报销？', '生孩子医疗费怎么报销？']
 async function scrollToBottom() {
   await nextTick()
   if (messageBox.value) messageBox.value.scrollTop = messageBox.value.scrollHeight
@@ -41,9 +41,8 @@ async function ask(text = question.value) {
       id: Date.now() + 1,
       role: 'assistant',
       text: result.answer,
-      source: result.sources?.length
-        ? `参考：${result.sources.map(source => `${source.title}（${source.department}）`).join('；')}`
-        : `AI 回答 · ${result.model || 'DeepSeek'} · 知识库未命中`
+      sources: result.sources || [],
+      source: result.sources?.length ? '' : `AI 回答 · ${result.model || 'DeepSeek'} · 知识库未命中`
     })
   } catch (error) {
     serviceError.value = error.message
@@ -73,7 +72,7 @@ function handleKeydown(event) {
 
     <main>
       <header class="top"><div><h1>政务服务智能咨询</h1><p>办事问题，一问即达</p></div><div class="status"><i></i>服务正常</div></header>
-      <div class="notice">AI 接入版本：回答由大模型生成，当前尚未接入权威政务知识库，不构成正式办事依据。</div>
+      <div class="notice">医保试点版：已接入江苏省医保局官方办事指南，政策可能调整，具体办理以参保地医保部门最新规定为准。</div>
 
       <div class="workspace">
         <section class="chat" aria-label="智能咨询对话">
@@ -81,7 +80,7 @@ function handleKeydown(event) {
           <div ref="messageBox" class="messages" aria-live="polite">
             <div v-for="message in messages" :key="message.id" class="row" :class="{ user: message.role === 'user' }">
               <div class="avatar">{{ message.role === 'user' ? '我' : '政' }}</div>
-              <div class="bubble"><p>{{ message.text }}</p><div v-if="message.source" class="source">{{ message.source }}</div></div>
+              <div class="bubble"><p>{{ message.text }}</p><div v-if="message.sources?.length" class="source">官方依据：<a v-for="(item, index) in message.sources" :key="item.url" :href="item.url" target="_blank" rel="noopener noreferrer">{{ index ? '；' : '' }}{{ item.title }}</a></div><div v-else-if="message.source" class="source">{{ message.source }}</div></div>
             </div>
             <div v-if="loading" class="row"><div class="avatar">政</div><div class="bubble typing">AI 正在整理回答…</div></div>
           </div>
@@ -93,7 +92,7 @@ function handleKeydown(event) {
 
         <aside class="panel">
           <section class="card"><h2>常见问题</h2><div class="quick"><button v-for="item in quickQuestions" :key="item" @click="ask(item)">{{ item }}</button></div></section>
-          <section class="card"><h2>服务概况</h2><div class="metric"><span>AI 服务</span><strong>DeepSeek API</strong></div><div class="metric"><span>政策知识库</span><strong>江苏 30 份</strong></div><div class="metric"><span>对话模式</span><strong>检索增强</strong></div></section>
+          <section class="card"><h2>服务概况</h2><div class="metric"><span>AI 服务</span><strong>DeepSeek API</strong></div><div class="metric"><span>政策知识库</span><strong>江苏 32 份</strong></div><div class="metric"><span>医保闭环</span><strong>首批 5 项</strong></div><div class="metric"><span>对话模式</span><strong>检索增强</strong></div></section>
         </aside>
       </div>
     </main>

@@ -8,6 +8,7 @@
     "dev:web": "vite",
     "dev:api": "node --env-file-if-exists=.env --watch server/index.js",
     "build": "vite build",
+    "test": "node --test",
     "preview": "vite preview",
     "start": "node --env-file-if-exists=.env server/index.js"
   },

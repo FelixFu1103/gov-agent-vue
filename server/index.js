@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize, resolve } from 'node:path'
+import { loadKnowledge, searchKnowledge } from './knowledge.js'
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
@@ -14,48 +15,11 @@ const instructions = `你是政务服务智能咨询助手。
 不得要求用户提供身份证号、银行卡号、密码、验证码等敏感信息。
 如果资料只证明官方门户存在某事项、但不包含具体材料或时限，必须明确说明，并引导用户通过给出的官方来源核验。没有相关资料时要明确说明知识库暂未覆盖。`
 
-function parseDocument(filename, raw) {
-  const [, header = '', body = raw] = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/) || []
-  const metadata = Object.fromEntries(header.split('\n').filter(Boolean).map(line => {
-    const splitAt = line.indexOf(':')
-    return [line.slice(0, splitAt).trim(), line.slice(splitAt + 1).trim()]
-  }))
-  return { filename, ...metadata, body: body.trim() }
-}
-
-async function loadKnowledge() {
-  try {
-    const files = (await readdir(knowledgeRoot)).filter(file => file.endsWith('.md')).sort()
-    return Promise.all(files.map(async filename => parseDocument(filename, await readFile(join(knowledgeRoot, filename), 'utf8'))))
-  } catch (error) {
-    console.error('Knowledge base load failed:', error?.message)
-    return []
-  }
-}
-
-const knowledgeDocuments = await loadKnowledge()
-
-function searchKnowledge(query, limit = 4) {
-  const normalized = query.toLowerCase().replace(/\s+/g, '')
-  const terms = new Set([
-    ...query.toLowerCase().split(/[\s，。！？、；：,.!?;:（）()]+/).filter(term => term.length > 1),
-    ...Array.from({ length: Math.max(0, normalized.length - 1) }, (_, index) => normalized.slice(index, index + 2))
-  ])
-  return knowledgeDocuments
-    .map(document => {
-      const title = `${document.title || ''}${document.topic || ''}${document.department || ''}`.toLowerCase()
-      const text = `${title}${document.body}`.toLowerCase()
-      let score = 0
-      for (const term of terms) {
-        if (title.includes(term)) score += 4
-        else if (text.includes(term)) score += 1
-      }
-      return { document, score }
-    })
-    .filter(result => result.score >= 2)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map(result => result.document)
+let knowledgeDocuments = []
+try {
+  knowledgeDocuments = await loadKnowledge(knowledgeRoot)
+} catch (error) {
+  console.error('Knowledge base load failed:', error?.message)
 }
 
 const mimeTypes = {
@@ -108,7 +72,7 @@ async function handleChat(request, response) {
       .slice(-10)
       .map(item => ({ role: item.role, content: item.content.slice(0, 4_000) }))
     : []
-  const matches = searchKnowledge(message)
+  const matches = searchKnowledge(knowledgeDocuments, message)
   const context = matches.length
     ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n部门：${document.department}\n地区：${document.region}\n核验日期：${document.verified_at}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
     : '未检索到相关的本地知识库资料。'
