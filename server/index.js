@@ -5,7 +5,7 @@ import { buildRetrievalQuery, loadKnowledge, searchKnowledge } from './knowledge
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
-const model = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
+const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
 const knowledgeRoot = resolve('knowledge/documents')
 
 const instructions = `你是政务服务智能咨询助手。
@@ -99,7 +99,7 @@ async function handleChat(request, response) {
       { role: 'user', content: `本次检索资料：\n${context}\n\n用户问题：${message}` }
     ],
     stream: false,
-    max_tokens: 1400
+    max_tokens: 4096
   }
 
   try {
