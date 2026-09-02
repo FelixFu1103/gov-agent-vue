@@ -10,10 +10,19 @@ const knowledgeRoot = resolve('knowledge/documents')
 
 const instructions = `你是政务服务智能咨询助手。
 请使用简洁、准确、易懂的中文回答。始终回答用户最新一轮问题，并结合历史对话中已经确认的城市、参保险种、人员身份和办理阶段，不要重复询问已经给出的信息。
+回答必须便于网页阅读，并严格使用以下纯文本结构：
+结论：用1至2句话直接回答。
+
+办理建议：
+1. 每一步只说一件事，每项不超过两句话。
+2. 总计不超过5项。
+
+需要确认：仅列出影响结论但尚未获得的信息；如果没有则省略。
+不要使用 Markdown 标记，不要输出 **、##、表格或大段连续文字。整篇尽量控制在500个汉字以内。
 你会收到从江苏政务知识库检索出的参考资料。只能依据这些资料陈述政务事项；不得编造法规、办理材料、费用、时限或主管部门。
 涉及地区差异时先询问用户所在省市；涉及个人办件、身份信息、法律结论或重大权益时，提醒用户以当地政府官网和主管部门答复为准。
 不得要求用户提供身份证号、银行卡号、密码、验证码等敏感信息。
-如果资料只证明官方门户存在某事项、但不包含具体材料或时限，必须明确说明，并引导用户通过给出的官方来源核验。没有相关资料时要明确说明知识库暂未覆盖。`
+如果资料只证明官方门户存在某事项、但不包含具体材料或时限，必须明确说明，并引导用户通过给出的官方来源核验。没有相关资料时要明确说明知识库暂未覆盖。资料没有提供电话、金额或具体比例时，禁止自行补充。`
 
 let knowledgeDocuments = []
 try {
@@ -87,7 +96,7 @@ async function handleChat(request, response) {
       .map(item => ({ role: item.role, content: item.content.slice(0, 4_000) }))
     : []
   const retrievalQuery = buildRetrievalQuery(history, message)
-  const matches = searchKnowledge(knowledgeDocuments, retrievalQuery)
+  const matches = searchKnowledge(knowledgeDocuments, retrievalQuery, 1)
   const context = matches.length
     ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n部门：${document.department}\n地区：${document.region}\n核验日期：${document.verified_at}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
     : '未检索到相关的本地知识库资料。'

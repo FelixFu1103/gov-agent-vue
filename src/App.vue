@@ -98,3 +98,24 @@ function handleKeydown(event) {
     </main>
   </div>
 </template>
+
+<style>
+.bubble p {
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.source {
+  line-height: 1.65;
+}
+
+.source a {
+  color: #145dbf;
+  text-decoration: none;
+}
+
+.source a:hover {
+  text-decoration: underline;
+}
+</style>
