@@ -1,7 +1,8 @@
 import { createServer } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize, resolve } from 'node:path'
-import { buildRetrievalQuery, loadKnowledge, searchKnowledge } from './knowledge.js'
+import { loadKnowledge } from './knowledge.js'
+import { agentToolDefinitions, runAgentTools } from './agent-tools.js'
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
@@ -86,6 +87,9 @@ async function handleChat(request, response) {
   }
 
   const message = typeof body.message === 'string' ? body.message.trim() : ''
+  const conversationId = typeof body.conversationId === 'string' && /^[a-zA-Z0-9-]{8,80}$/.test(body.conversationId)
+    ? body.conversationId
+    : crypto.randomUUID()
   if (!message) return sendJson(response, 400, { error: '请输入咨询问题' })
   if (message.length > 2_000) return sendJson(response, 400, { error: '问题不能超过 2000 个字符' })
 
@@ -95,8 +99,8 @@ async function handleChat(request, response) {
       .slice(-10)
       .map(item => ({ role: item.role, content: item.content.slice(0, 4_000) }))
     : []
-  const retrievalQuery = buildRetrievalQuery(history, message)
-  const matches = searchKnowledge(knowledgeDocuments, retrievalQuery, 1)
+  const agent = await runAgentTools({ conversationId, message, history, documents: knowledgeDocuments })
+  const matches = agent.guide ? [agent.guide] : agent.policies.slice(0, 1).map(policy => knowledgeDocuments.find(document => document.filename === policy.documentId)).filter(Boolean)
   const context = matches.length
     ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n部门：${document.department}\n地区：${document.region}\n核验日期：${document.verified_at}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
     : '未检索到相关的本地知识库资料。'
@@ -105,7 +109,7 @@ async function handleChat(request, response) {
     messages: [
       { role: 'system', content: instructions },
       ...history,
-      { role: 'user', content: `本次检索资料：\n${context}\n\n用户问题：${message}` }
+      { role: 'user', content: `Agent当前状态：\n意图：${agent.state.intent}\n已确认信息：${JSON.stringify(agent.state.slots)}\n仍缺信息：${agent.slotCheck.missing.join('、') || '无'}\n下一追问：${agent.slotCheck.nextQuestion || '无'}\n证据判断：${agent.evidence.reason}\n建议材料清单：${agent.checklist.items.join('；') || '暂无'}\n\n本次检索资料：\n${context}\n\n用户最新问题：${message}\n\n请依据资料回答；如果仍缺信息，在提供现有通用结论后，只追问“下一追问”中的一个问题。` }
     ],
     stream: false,
     max_tokens: 4096
@@ -137,6 +141,15 @@ async function handleChat(request, response) {
     return sendJson(response, 200, {
       answer,
       model: result.model || model,
+      conversationId,
+      agent: {
+        intent: agent.state.intent,
+        confidence: agent.state.confidence,
+        slots: agent.state.slots,
+        missingSlots: agent.slotCheck.missing,
+        evidence: agent.evidence,
+        tools: agent.trace
+      },
       sources: matches.map(document => ({ title: document.title, department: document.department, url: document.source }))
     })
   } catch (error) {
@@ -172,7 +185,7 @@ async function serveStatic(request, response) {
 createServer(async (request, response) => {
   if (request.method === 'POST' && request.url === '/api/chat') return handleChat(request, response)
   if (request.method === 'GET' && request.url === '/api/health') {
-    return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model, knowledgeDocuments: knowledgeDocuments.length })
+    return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model, knowledgeDocuments: knowledgeDocuments.length, agentTools: agentToolDefinitions })
   }
   if (request.method === 'GET' || request.method === 'HEAD') return serveStatic(request, response)
   return sendJson(response, 405, { error: '不支持的请求方法' })

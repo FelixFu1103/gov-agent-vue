@@ -5,6 +5,7 @@ const question = ref('')
 const loading = ref(false)
 const messageBox = ref(null)
 const serviceError = ref('')
+const conversationId = crypto.randomUUID()
 const messages = ref([
   { id: 1, role: 'assistant', text: '您好，我是政务服务智能助手。您可以咨询社保、公积金、户籍、企业开办等事项。请告诉我您想办理什么业务？' }
 ])
@@ -33,7 +34,7 @@ async function ask(text = question.value) {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: value, history })
+      body: JSON.stringify({ message: value, history, conversationId })
     })
     const result = await response.json()
     if (!response.ok) throw new Error(result.error || 'AI 服务暂时不可用')
