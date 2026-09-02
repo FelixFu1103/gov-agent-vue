@@ -25,16 +25,26 @@ export async function loadKnowledge(knowledgeRoot) {
 
 function queryTerms(query) {
   const normalized = query.toLowerCase().replace(/\s+/g, '')
-  const expanded = new Set(query.toLowerCase().split(/[\s，。！？、；：,.!?;:（）()]+/).filter(term => term.length > 1))
+  const expanded = query.toLowerCase().split(/[\s，。！？、；：,.!?;:（）()]+/).filter(term => term.length > 1)
   for (const group of aliasGroups) {
-    if (group.some(alias => normalized.includes(alias))) group.forEach(alias => expanded.add(alias))
+    if (group.some(alias => normalized.includes(alias))) expanded.push(...group)
   }
-  for (let index = 0; index < normalized.length - 1; index += 1) expanded.add(normalized.slice(index, index + 2))
+  for (let index = 0; index < normalized.length - 1; index += 1) expanded.push(normalized.slice(index, index + 2))
   return expanded
+}
+
+function inferIntent(query) {
+  if (/(异地|外省|跨省|外地).*(就医|看病|住院|医院|备案)|(就医|看病|住院).*(异地|外省|跨省|外地)/.test(query)) return '异地就医'
+  if (/(生育|生孩子|分娩|产检).*(费用|报销|支付)/.test(query)) return '生育医疗费'
+  if (/(门诊|住院|医疗).*(报销|零星|手工|未结算)/.test(query)) return '医疗报销'
+  if (/(居民|城乡|学生).*(医保|参保)/.test(query)) return '居民参保'
+  if (/(职工|员工|单位|灵活就业).*(医保|参保)/.test(query)) return '职工参保'
+  return ''
 }
 
 export function searchKnowledge(documents, query, limit = 4) {
   const terms = queryTerms(query)
+  const intent = inferIntent(query)
   return documents
     .map(document => {
       const title = `${document.title || ''}${document.topic || ''}${document.keywords || ''}${document.department || ''}`.toLowerCase()
@@ -44,6 +54,7 @@ export function searchKnowledge(documents, query, limit = 4) {
         if (title.includes(term)) score += 5
         else if (text.includes(term)) score += 1
       }
+      if (intent && `${document.topic || ''}${document.title || ''}`.includes(intent)) score += 30
       if (document.priority === 'high' && score > 0) score += 3
       return { document, score }
     })
@@ -51,4 +62,14 @@ export function searchKnowledge(documents, query, limit = 4) {
     .sort((a, b) => b.score - a.score || a.document.filename.localeCompare(b.document.filename))
     .slice(0, limit)
     .map(result => result.document)
+}
+
+export function buildRetrievalQuery(history, message) {
+  const priorUserMessages = history
+    .filter(item => item.role === 'user')
+    .slice(-3)
+    .map(item => item.content.trim())
+    .filter(Boolean)
+  const latestIntent = priorUserMessages.at(-1)
+  return [...priorUserMessages, latestIntent, message].filter(Boolean).join('；')
 }

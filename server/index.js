@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize, resolve } from 'node:path'
-import { loadKnowledge, searchKnowledge } from './knowledge.js'
+import { buildRetrievalQuery, loadKnowledge, searchKnowledge } from './knowledge.js'
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
@@ -9,7 +9,7 @@ const model = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
 const knowledgeRoot = resolve('knowledge/documents')
 
 const instructions = `你是政务服务智能咨询助手。
-请使用简洁、准确、易懂的中文回答。
+请使用简洁、准确、易懂的中文回答。始终回答用户最新一轮问题，并结合历史对话中已经确认的城市、参保险种、人员身份和办理阶段，不要重复询问已经给出的信息。
 你会收到从江苏政务知识库检索出的参考资料。只能依据这些资料陈述政务事项；不得编造法规、办理材料、费用、时限或主管部门。
 涉及地区差异时先询问用户所在省市；涉及个人办件、身份信息、法律结论或重大权益时，提醒用户以当地政府官网和主管部门答复为准。
 不得要求用户提供身份证号、银行卡号、密码、验证码等敏感信息。
@@ -50,6 +50,20 @@ async function readJson(request) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
 }
 
+async function requestDeepSeek(payload) {
+  const apiResponse = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(45_000)
+  })
+  const result = await apiResponse.json()
+  return { apiResponse, result }
+}
+
 async function handleChat(request, response) {
   if (!process.env.DEEPSEEK_API_KEY) {
     return sendJson(response, 503, { error: '服务端尚未配置 DEEPSEEK_API_KEY' })
@@ -72,7 +86,8 @@ async function handleChat(request, response) {
       .slice(-10)
       .map(item => ({ role: item.role, content: item.content.slice(0, 4_000) }))
     : []
-  const matches = searchKnowledge(knowledgeDocuments, message)
+  const retrievalQuery = buildRetrievalQuery(history, message)
+  const matches = searchKnowledge(knowledgeDocuments, retrievalQuery)
   const context = matches.length
     ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n部门：${document.department}\n地区：${document.region}\n核验日期：${document.verified_at}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
     : '未检索到相关的本地知识库资料。'
@@ -84,29 +99,32 @@ async function handleChat(request, response) {
       { role: 'user', content: `本次检索资料：\n${context}\n\n用户问题：${message}` }
     ],
     stream: false,
-    max_tokens: 900
+    max_tokens: 1400
   }
 
   try {
-    const apiResponse = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(45_000)
-    })
-
-    const result = await apiResponse.json()
+    let { apiResponse, result } = await requestDeepSeek(payload)
     if (!apiResponse.ok) {
       console.error('DeepSeek API error:', apiResponse.status, result?.error?.code)
       return sendJson(response, 502, { error: 'AI 服务暂时不可用，请稍后重试' })
     }
 
-    const answer = result.choices?.[0]?.message?.content?.trim()
+    let answer = result.choices?.[0]?.message?.content?.trim()
+    if (!answer) {
+      console.warn('DeepSeek returned empty content, retrying:', result.choices?.[0]?.finish_reason || 'unknown')
+      const retryPayload = {
+        ...payload,
+        messages: [...payload.messages, { role: 'user', content: '请直接输出对上一问题的最终中文答复，不要返回空内容。' }]
+      }
+      ;({ apiResponse, result } = await requestDeepSeek(retryPayload))
+      if (!apiResponse.ok) {
+        console.error('DeepSeek retry error:', apiResponse.status, result?.error?.code)
+        return sendJson(response, 502, { error: 'AI 服务暂时不可用，请稍后重试' })
+      }
+      answer = result.choices?.[0]?.message?.content?.trim()
+    }
 
-    if (!answer) return sendJson(response, 502, { error: 'AI 未返回可显示的回答' })
+    if (!answer) return sendJson(response, 502, { error: 'AI 连续两次未返回回答，请重新发送问题' })
     return sendJson(response, 200, {
       answer,
       model: result.model || model,
