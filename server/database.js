@@ -33,39 +33,68 @@ export async function createKnowledgeDatabase() {
 
   return {
     pool,
-    async search(query, limit = 3) {
+    async search(query, options = {}) {
+      const { limit = 3, intent = null, region = null } = typeof options === 'number' ? { limit: options } : options
+      const candidateLimit = 20
       let embedding = null
       try {
         embedding = await createEmbedding(query)
       } catch (error) {
         console.warn('Embedding request failed, using text search:', error.message)
       }
-      const params = [query, limit]
-      const vectorScore = embedding ? 'CASE WHEN kc.embedding IS NULL THEN 0 ELSE 1 - (kc.embedding <=> $3::vector) END' : '0'
-      if (embedding) params.push(vectorLiteral(embedding))
-      const { rows } = await pool.query(`
-        WITH candidates AS (
-        SELECT
-          kd.external_id AS "documentId", kd.title, kd.department, kd.region,
-          kd.verified_at AS "verifiedAt", kd.version_note AS "versionNote",
-          kd.source_url AS source, kc.content AS body,
-          (similarity(kc.search_text, $1) * 0.35 + ${vectorScore} * 0.65 +
-            CASE WHEN kc.search_text ILIKE '%' || $1 || '%' THEN 0.25 ELSE 0 END) AS score,
-          kd.id AS internal_document_id
+      const commonSql = `
         FROM knowledge_chunks kc
         JOIN knowledge_documents kd ON kd.id = kc.document_id
         WHERE kd.status = 'published'
-        ), ranked AS (
-          SELECT *, ROW_NUMBER() OVER (PARTITION BY internal_document_id ORDER BY score DESC) AS row_number
-          FROM candidates
-        )
-        SELECT "documentId", title, department, region, "verifiedAt", "versionNote", source, body, score
-        FROM ranked
-        WHERE row_number = 1
-        ORDER BY score DESC
-        LIMIT $2
-      `, params)
-      return rows
+          AND $1::text IS NOT NULL
+          AND (kd.effective_from IS NULL OR kd.effective_from <= CURRENT_DATE)
+          AND (kd.effective_to IS NULL OR kd.effective_to >= CURRENT_DATE)
+          AND ($3::text IS NULL OR kd.service_code = $3)
+          AND ($4::text IS NULL OR kd.region = '江苏省' OR kd.region ILIKE '%' || $4 || '%')`
+      const params = [query, candidateLimit, intent, region]
+      const keywordResult = await pool.query(`
+        SELECT kd.external_id AS "documentId", kd.title, kd.department, kd.region,
+          kd.verified_at AS "verifiedAt", kd.version_note AS "versionNote", kd.source_url AS source,
+          kc.content AS body, similarity(kc.search_text, $1) +
+          CASE WHEN kc.search_text ILIKE '%' || $1 || '%' THEN 0.5 ELSE 0 END AS "rawScore"
+        ${commonSql}
+        ORDER BY "rawScore" DESC
+        LIMIT $2`, params)
+
+      let vectorRows = []
+      if (embedding) {
+        const vectorResult = await pool.query(`
+          SELECT kd.external_id AS "documentId", kd.title, kd.department, kd.region,
+            kd.verified_at AS "verifiedAt", kd.version_note AS "versionNote", kd.source_url AS source,
+            kc.content AS body, 1 - (kc.embedding <=> $5::vector) AS "rawScore"
+          ${commonSql}
+            AND kc.embedding IS NOT NULL
+          ORDER BY kc.embedding <=> $5::vector
+          LIMIT $2`, [...params, vectorLiteral(embedding)])
+        vectorRows = vectorResult.rows
+      }
+
+      const fused = new Map()
+      const addRanked = (rows, channel) => {
+        const uniqueRows = [...new Map(rows.map(row => [row.documentId, row])).values()]
+        uniqueRows.forEach((row, index) => {
+        const current = fused.get(row.documentId) || { ...row, score: 0, channels: [], keywordScore: 0, vectorScore: 0 }
+        current.score += 1 / (60 + index + 1)
+        current.channels.push(channel)
+        current[`${channel}Score`] = Math.max(current[`${channel}Score`], Number(row.rawScore))
+        if (!current.body || Number(row.rawScore) > Number(current.rawScore || 0)) Object.assign(current, row)
+        fused.set(row.documentId, current)
+        })
+      }
+      addRanked(keywordResult.rows, 'keyword')
+      addRanked(vectorRows, 'vector')
+      const minimumKeywordScore = Number(process.env.RETRIEVAL_MIN_KEYWORD_SCORE || 0.05)
+      const minimumVectorScore = Number(process.env.RETRIEVAL_MIN_VECTOR_SCORE || 0.42)
+      return [...fused.values()]
+        .filter(row => row.keywordScore >= minimumKeywordScore || row.vectorScore >= minimumVectorScore)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+        .map(({ rawScore, keywordScore, vectorScore, ...row }) => row)
     },
     async health() {
       const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM knowledge_documents WHERE status = $1', ['published'])

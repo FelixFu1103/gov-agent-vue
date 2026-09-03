@@ -4,6 +4,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE TABLE IF NOT EXISTS knowledge_documents (
   id BIGSERIAL PRIMARY KEY,
   external_id TEXT NOT NULL UNIQUE,
+  service_code TEXT,
   title TEXT NOT NULL,
   department TEXT,
   region TEXT,
@@ -12,6 +13,8 @@ CREATE TABLE IF NOT EXISTS knowledge_documents (
   source_url TEXT NOT NULL,
   source_notice_url TEXT,
   verified_at DATE,
+  effective_from DATE,
+  effective_to DATE,
   version_note TEXT,
   priority TEXT,
   content_hash TEXT NOT NULL,
@@ -34,5 +37,7 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
 
 CREATE INDEX IF NOT EXISTS knowledge_documents_status_idx ON knowledge_documents(status);
 CREATE INDEX IF NOT EXISTS knowledge_documents_topic_idx ON knowledge_documents(topic);
+CREATE INDEX IF NOT EXISTS knowledge_documents_service_code_idx ON knowledge_documents(service_code);
+CREATE INDEX IF NOT EXISTS knowledge_documents_effective_idx ON knowledge_documents(effective_from, effective_to);
 CREATE INDEX IF NOT EXISTS knowledge_chunks_search_trgm_idx ON knowledge_chunks USING gin(search_text gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx ON knowledge_chunks USING hnsw (embedding vector_cosine_ops);

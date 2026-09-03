@@ -4,6 +4,7 @@ import { extname, join, normalize, resolve } from 'node:path'
 import { loadKnowledge } from './knowledge.js'
 import { agentToolDefinitions, runAgentTools } from './agent-tools.js'
 import { createKnowledgeDatabase } from './database.js'
+import { verifyGeneratedAnswer } from './citation-verifier.js'
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
@@ -153,6 +154,8 @@ async function handleChat(request, response) {
     }
 
     if (!answer) return sendJson(response, 502, { error: 'AI 连续两次未返回回答，请重新发送问题' })
+    const verification = verifyGeneratedAnswer(answer, matches)
+    answer = verification.answer
     return sendJson(response, 200, {
       answer,
       model: result.model || model,
@@ -163,6 +166,7 @@ async function handleChat(request, response) {
         slots: agent.state.slots,
         missingSlots: agent.slotCheck.missing,
         evidence: agent.evidence,
+        citationVerification: { passed: verification.passed, removedClaims: verification.unsupportedClaims },
         tools: agent.trace
       },
       sources: matches.map(document => ({ title: document.title, department: document.department, url: document.source }))

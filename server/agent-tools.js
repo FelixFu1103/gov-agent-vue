@@ -43,11 +43,17 @@ export function classify_intent({ message, previousIntent }) {
   const text = message.replace(/\s+/g, '')
   const candidates = []
   const add = (intent, score) => candidates.push({ intent, score })
-  if (includesAny(text, ['异地', '外省', '跨省', '外地', '备案', '转诊']) || /(去|到|在).{2,8}(看病|就医|住院)/.test(text)) add('cross_region_medical_filing', 0.94)
-  if (includesAny(text, ['生育', '生孩子', '分娩', '产检']) && includesAny(text, ['费用', '报销', '支付', '医保'])) add('maternity_medical_payment', 0.95)
-  if (includesAny(text, ['报销', '零星报销', '手工报销', '没有直接结算', '未直接结算'])) add('medical_expense_reimbursement', 0.88)
-  if (includesAny(text, ['居民医保', '城乡医保', '学生医保'])) add('medical_resident_enrollment', 0.92)
-  if (includesAny(text, ['职工医保', '员工医保', '单位参保', '灵活就业']) && includesAny(text, ['参保', '登记', '办理', '怎么交'])) add('medical_employee_enrollment', 0.9)
+  const reimbursementSignal = includesAny(text, ['报销', '零星报销', '手工报销', '现金垫付', '没有直接结算', '未直接结算', '费用未结算', '发票', '费用清单'])
+  const maternitySignal = includesAny(text, ['生育', '生孩子', '分娩', '产检'])
+  const crossRegionSignal = includesAny(text, ['备案', '跨省', '外省', '异地就医', '异地安置', '常驻异地', '异地工作', '转诊']) || /(去|到|在).{2,8}(看病|就医|住院)/.test(text)
+  const residentSignal = includesAny(text, ['居民医保', '居民医疗保险', '城乡医保', '城乡居民', '学生医保', '农村居民']) || (includesAny(text, ['居民', '学生', '无业', '没有工作', '没有单位']) && includesAny(text, ['医保', '医疗保险', '参保']))
+  const employeeSignal = includesAny(text, ['职工医保', '员工医保', '单位参保', '灵活就业', '自由职业']) || (includesAny(text, ['公司', '企业', '单位', '员工', '职工', '入职']) && includesAny(text, ['医保', '医疗保险', '参保']))
+
+  if (maternitySignal && includesAny(text, ['费', '报销', '支付', '医保', '保险', '材料', '申请', '提交'])) add('maternity_medical_payment', 0.98)
+  if (reimbursementSignal) add('medical_expense_reimbursement', maternitySignal ? 0.86 : 0.96)
+  if (crossRegionSignal) add('cross_region_medical_filing', reimbursementSignal ? 0.9 : 0.95)
+  if (residentSignal) add('medical_resident_enrollment', reimbursementSignal ? 0.84 : 0.94)
+  if (employeeSignal && includesAny(text, ['参保', '参加', '登记', '办理', '怎么交', '材料', '证件', '开户', '新增', '指南'])) add('medical_employee_enrollment', reimbursementSignal ? 0.82 : 0.93)
   candidates.sort((a, b) => b.score - a.score)
   if (!candidates.length && previousIntent) candidates.push({ intent: previousIntent, score: 0.72 })
   return {
@@ -136,9 +142,9 @@ export function getSessionState(conversationId) {
   return state || null
 }
 
-export async function search_policy({ documents, query, limit = 3, databaseSearch }) {
+export async function search_policy({ documents, query, limit = 3, intent, slots = {}, databaseSearch }) {
   if (databaseSearch) {
-    const results = await databaseSearch(query, limit)
+    const results = await databaseSearch(query, { limit, intent: !intent || intent === 'unknown' ? null : intent, region: slots.insured_city || null })
     if (results.length) return results
   }
   return searchKnowledge(documents, query, limit).map(document => ({
@@ -197,7 +203,7 @@ export async function runAgentTools({ conversationId, message, history, document
   const state = update_session_state({ conversationId, intentResult, slots })
   const slotCheck = check_required_slots({ intent: state.intent, slots: state.slots })
   const query = buildRetrievalQuery(history, message)
-  const policies = await search_policy({ documents, query, databaseSearch })
+  const policies = await search_policy({ documents, query, intent: state.intent, slots: state.slots, databaseSearch })
   const guide = get_service_guide({ documents, intent: state.intent })
   const evidence = assess_evidence({ intent: state.intent, guide, slots: state.slots })
   const checklist = generate_material_checklist({ intent: state.intent, slots: state.slots })

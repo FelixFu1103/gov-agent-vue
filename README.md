@@ -34,7 +34,7 @@ npm start
 
 医保已完成首批 5 项纵向闭环：职工医保参保、居民医保参保、异地就医备案、门诊/住院零星报销、生育医疗费支付。这 5 项包含适用对象、材料、渠道、流程、时限、回答边界和江苏省医保局原始依据；其他主题目前仍以事项索引为主。
 
-运行 `npm test` 可执行医保检索回归测试。
+运行 `npm test` 可执行医保检索回归测试；运行 `npm run eval:retrieval` 可用本地数据库和 bge-m3 执行 100 条固定问题的端到端评测。
 
 ## 医保 Agent 工具循环
 
@@ -55,7 +55,7 @@ npm start
 
 ## PostgreSQL + pgvector 知识库
 
-项目支持数据库优先、本地 Markdown 自动降级。数据库保存文档版本、来源、核验日期、正文分块和 1536 维向量，并使用 `pg_trgm` 中文相似度与向量余弦相似度进行混合排序。
+项目支持数据库优先、本地 Markdown 自动降级。数据库保存事项编码、政策状态、有效期、版本、来源、核验日期、正文分块和向量。导入时按照 Markdown 标题进行章节感知切片；查询时分别取得关键词与向量 Top-20，通过 RRF 融合去重，并按事项、地区、政策状态和有效期过滤。低于最小关键词及向量相关度的结果不会进入回答上下文。
 
 安装 Docker Desktop 后运行：
 
@@ -74,12 +74,21 @@ npm run dev
     "connected": true,
     "documents": 32,
     "vectorEnabled": true,
-    "vectorizedChunks": 32
+    "vectorizedChunks": 54
   }
 }
 ```
 
 默认通过 Docker 中的 Ollama 和 `bge-m3` 在本机生成1024维向量，知识正文不会发送给第三方。首次使用需要运行 `npm run db:model` 下载模型，然后运行 `npm run db:ingest`。
+
+DeepSeek 生成回答后，服务端还会进行一次证据校验：对于检索片段不支持的具体电话、金额、比例或办理时限，系统会移除对应表述并在调试信息中给出 `citationVerification` 结果。该校验是确定性安全网，不能替代人工政策审核。
+
+当前固定评测集覆盖 5 个医保事项、共 100 种问法，输出意图准确率、Top-1 准确率与 Top-3 召回率。新增或修改知识资料后，应重新执行：
+
+```bash
+npm run db:ingest
+npm run eval:retrieval
+```
 
 如需改用云端 OpenAI 兼容的 Embedding 服务，可在 `.env` 修改：
 

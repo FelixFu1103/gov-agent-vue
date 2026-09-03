@@ -71,7 +71,10 @@ test('prefers database retrieval when the vector store is available', async () =
   const policies = await search_policy({
     documents,
     query: '异地就医',
-    databaseSearch: async () => databaseResult
+    databaseSearch: async (_query, options) => {
+      assert.equal(options.intent, null)
+      return databaseResult
+    }
   })
   assert.deepEqual(policies, databaseResult)
 })
