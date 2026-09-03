@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS knowledge_documents (
   keywords TEXT,
   source_url TEXT NOT NULL,
   source_notice_url TEXT,
+  source_document_url TEXT,
   verified_at DATE,
   effective_from DATE,
   effective_to DATE,

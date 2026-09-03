@@ -31,6 +31,7 @@ try {
   await pool.query('ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS service_code TEXT')
   await pool.query('ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS effective_from DATE')
   await pool.query('ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS effective_to DATE')
+  await pool.query('ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS source_document_url TEXT')
   await pool.query('CREATE INDEX IF NOT EXISTS knowledge_documents_service_code_idx ON knowledge_documents(service_code)')
   await pool.query('CREATE INDEX IF NOT EXISTS knowledge_documents_effective_dates_idx ON knowledge_documents(effective_from, effective_to)')
   await pool.query(`ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector(${embeddingDimensions})`)
@@ -44,17 +45,17 @@ try {
       const contentHash = createHash('sha256').update(document.body).digest('hex')
       const { rows } = await client.query(`
         INSERT INTO knowledge_documents
-          (external_id, service_code, title, department, region, topic, keywords, source_url, source_notice_url, verified_at, effective_from, effective_to, version_note, priority, content_hash, status, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'published',NOW())
+          (external_id, service_code, title, department, region, topic, keywords, source_url, source_notice_url, source_document_url, verified_at, effective_from, effective_to, version_note, priority, content_hash, status, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'published',NOW())
         ON CONFLICT (external_id) DO UPDATE SET
           service_code=EXCLUDED.service_code, title=EXCLUDED.title, department=EXCLUDED.department, region=EXCLUDED.region,
           topic=EXCLUDED.topic, keywords=EXCLUDED.keywords, source_url=EXCLUDED.source_url,
-          source_notice_url=EXCLUDED.source_notice_url, verified_at=EXCLUDED.verified_at,
+          source_notice_url=EXCLUDED.source_notice_url, source_document_url=EXCLUDED.source_document_url, verified_at=EXCLUDED.verified_at,
           effective_from=EXCLUDED.effective_from, effective_to=EXCLUDED.effective_to,
           version_note=EXCLUDED.version_note, priority=EXCLUDED.priority,
           content_hash=EXCLUDED.content_hash, status='published', updated_at=NOW()
         RETURNING id
-      `, [document.filename, serviceCodes[document.filename] || null, document.title, document.department, document.region, document.topic, document.keywords, document.source, document.source_notice, document.verified_at, document.effective_from || null, document.effective_to || null, document.version_note, document.priority, contentHash])
+      `, [document.filename, serviceCodes[document.filename] || null, document.title, document.department, document.region, document.topic, document.keywords, document.source, document.source_notice || null, document.source_document || null, document.verified_at, document.effective_from || null, document.effective_to || null, document.version_note, document.priority, contentHash])
       const documentId = rows[0].id
       await client.query('DELETE FROM knowledge_chunks WHERE document_id = $1', [documentId])
       const chunks = splitBySections(document.body)

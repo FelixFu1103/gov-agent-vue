@@ -4,8 +4,8 @@ department: 江苏省医疗保障局
 region: 江苏省
 topic: 医保参保 职工参保
 keywords: 职工医保 员工医保 单位参保 灵活就业 医保登记
-source: https://ybj.jiangsu.gov.cn/module/download/downfile.jsp?classid=0&filename=da69f49e8d894dd7adbab8bc38384434.pdf
-source_notice: https://ybj.jiangsu.gov.cn/art/2022/4/27/art_75671_10430132.html
+source: https://ybj.jiangsu.gov.cn/art/2022/4/27/art_75671_10430132.html
+source_document: https://ybj.jiangsu.gov.cn/module/download/downfile.jsp?classid=0&filename=da69f49e8d894dd7adbab8bc38384434.pdf
 verified_at: 2026-09-02
 priority: high
 version_note: 全省医疗保障经办政务服务事项办事指南（2022版）；各市最新细则可能调整

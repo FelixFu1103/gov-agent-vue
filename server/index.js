@@ -170,7 +170,7 @@ async function handleChat(request, response) {
         citationVerification: { passed: verification.passed, removedClaims: verification.unsupportedClaims },
         tools: agent.trace
       },
-      sources: matches.map(document => ({ title: document.title, department: document.department, url: document.source }))
+      sources: matches.map(document => ({ title: document.title, department: document.department, url: document.source, documentUrl: document.sourceDocument }))
     })
   } catch (error) {
     console.error('Chat request failed:', error?.name)

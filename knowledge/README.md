@@ -10,7 +10,8 @@
 - `department`：主管部门
 - `region`：适用地区
 - `topic` 和 `keywords`：检索辅助信息
-- `source`：官方原文地址
+- `source`：可直接浏览的官方网页原文地址
+- `source_document`：官方PDF或附件原文地址（如有）
 - `verified_at`：最近人工核验日期
 - `version_note`：政策版本和适用边界
 

@@ -157,6 +157,7 @@ export async function search_policy({ documents, query, limit = 3, intent, slots
     verifiedAt: document.verified_at,
     versionNote: document.version_note,
     source: document.source,
+    sourceDocument: document.source_document,
     body: document.body
   }))
 }

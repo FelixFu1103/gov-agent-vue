@@ -55,6 +55,7 @@ export async function createKnowledgeDatabase() {
       const keywordResult = await pool.query(`
         SELECT kd.external_id AS "documentId", kd.title, kd.department, kd.region,
           kd.verified_at AS "verifiedAt", kd.version_note AS "versionNote", kd.source_url AS source,
+          kd.source_document_url AS "sourceDocument",
           kc.content AS body, similarity(kc.search_text, $1) +
           CASE WHEN kc.search_text ILIKE '%' || $1 || '%' THEN 0.5 ELSE 0 END AS "rawScore"
         ${commonSql}
@@ -66,6 +67,7 @@ export async function createKnowledgeDatabase() {
         const vectorResult = await pool.query(`
           SELECT kd.external_id AS "documentId", kd.title, kd.department, kd.region,
             kd.verified_at AS "verifiedAt", kd.version_note AS "versionNote", kd.source_url AS source,
+            kd.source_document_url AS "sourceDocument",
             kc.content AS body, 1 - (kc.embedding <=> $5::vector) AS "rawScore"
           ${commonSql}
             AND kc.embedding IS NOT NULL

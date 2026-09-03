@@ -4,8 +4,8 @@ department: 江苏省医疗保障局
 region: 江苏省
 topic: 生育保险 生育医疗费
 keywords: 生育报销 生孩子报销 分娩费用 产检费用 男职工未就业配偶
-source: https://ybj.jiangsu.gov.cn/module/download/downfile.jsp?classid=0&filename=da69f49e8d894dd7adbab8bc38384434.pdf
-source_notice: https://ybj.jiangsu.gov.cn/art/2022/4/27/art_75671_10430132.html
+source: https://ybj.jiangsu.gov.cn/art/2022/4/27/art_75671_10430132.html
+source_document: https://ybj.jiangsu.gov.cn/module/download/downfile.jsp?classid=0&filename=da69f49e8d894dd7adbab8bc38384434.pdf
 verified_at: 2026-09-02
 priority: high
 version_note: 全省医疗保障经办政务服务事项办事指南（2022版）；本事项不等同于生育津贴申领

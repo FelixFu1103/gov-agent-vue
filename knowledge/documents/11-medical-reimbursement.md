@@ -4,8 +4,8 @@ department: 江苏省医疗保障局
 region: 江苏省
 topic: 医疗报销 门诊报销 住院报销
 keywords: 医保报销 零星报销 手工报销 未联网结算 医疗费用
-source: https://ybj.jiangsu.gov.cn/module/download/downfile.jsp?classid=0&filename=da69f49e8d894dd7adbab8bc38384434.pdf
-source_notice: https://ybj.jiangsu.gov.cn/art/2022/4/27/art_75671_10430132.html
+source: https://ybj.jiangsu.gov.cn/art/2022/4/27/art_75671_10430132.html
+source_document: https://ybj.jiangsu.gov.cn/module/download/downfile.jsp?classid=0&filename=da69f49e8d894dd7adbab8bc38384434.pdf
 verified_at: 2026-09-02
 priority: high
 version_note: 全省医疗保障经办政务服务事项办事指南（2022版）；待遇标准以参保地最新规定为准
