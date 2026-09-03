@@ -10,11 +10,12 @@ const cases = [
   ['没有工作怎么参加居民医保？', '31-resident-medical-enrollment.md'],
   ['去外省看病如何备案？', '10-cross-region-medical.md'],
   ['住院没有直接结算怎么报销？', '11-medical-reimbursement.md'],
-  ['生孩子医疗费怎么报销？', '32-maternity-medical-expense.md']
+  ['生孩子医疗费怎么报销？', '32-maternity-medical-expense.md'],
+  ['怎么给父母办理医保家庭共济？', '33-family-mutual-aid.md']
 ]
 
 test('knowledge base contains the complete medical insurance slice', () => {
-  assert.equal(documents.length, 5)
+  assert.equal(documents.length, 6)
   for (const [, expected] of cases) assert.ok(documents.some(document => document.filename === expected))
 })
 

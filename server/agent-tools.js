@@ -25,6 +25,11 @@ const intentDefinitions = {
     label: '生育医疗费支付',
     filename: '32-maternity-medical-expense.md',
     requiredSlots: ['insured_city', 'applicant_type', 'expense_type']
+  },
+  medical_family_mutual_aid: {
+    label: '职工医保个人账户家庭共济',
+    filename: '33-family-mutual-aid.md',
+    requiredSlots: ['insured_city', 'family_relationship']
   }
 }
 
@@ -46,10 +51,12 @@ export function classify_intent({ message, previousIntent }) {
   const explicitlyOutsideScope = includesAny(text, ['公积金', '身份证', '户口', '户籍', '营业执照', '企业开办', '结婚登记', '驾驶证', '养老保险', '失业保险', '工伤认定'])
   const reimbursementSignal = includesAny(text, ['报销', '零星报销', '手工报销', '现金垫付', '没有直接结算', '未直接结算', '费用未结算', '发票', '费用清单'])
   const maternitySignal = includesAny(text, ['生育', '生孩子', '分娩', '产检'])
+  const familyMutualAidSignal = includesAny(text, ['家庭共济', '医保共济', '医疗共济', '个人账户共济', '亲情账户']) || (includesAny(text, ['医保余额', '个人账户']) && includesAny(text, ['家人', '父母', '子女', '孩子', '配偶', '近亲属']))
   const crossRegionSignal = includesAny(text, ['备案', '跨省', '外省', '异地就医', '异地安置', '常驻异地', '异地工作', '转诊']) || /(去|到|在).{2,8}(看病|就医|住院)/.test(text)
   const residentSignal = includesAny(text, ['居民医保', '居民医疗保险', '城乡医保', '城乡居民', '学生医保', '农村居民']) || (includesAny(text, ['居民', '学生', '无业', '没有工作', '没有单位']) && includesAny(text, ['医保', '医疗保险', '参保']))
   const employeeSignal = includesAny(text, ['职工医保', '员工医保', '单位参保', '灵活就业', '自由职业']) || (includesAny(text, ['公司', '企业', '单位', '员工', '职工', '入职']) && includesAny(text, ['医保', '医疗保险', '参保']))
 
+  if (familyMutualAidSignal) add('medical_family_mutual_aid', 0.99)
   if (maternitySignal && includesAny(text, ['费', '报销', '支付', '医保', '保险', '材料', '申请', '提交'])) add('maternity_medical_payment', 0.98)
   if (reimbursementSignal) add('medical_expense_reimbursement', maternitySignal ? 0.86 : 0.96)
   if (crossRegionSignal) add('cross_region_medical_filing', reimbursementSignal ? 0.9 : 0.95)
@@ -105,6 +112,11 @@ export function extract_slots({ message, history = [], existingSlots = {} }) {
   else if (includesAny(current, ['住院'])) slots.expense_type = '住院费用'
   else if (includesAny(current, ['产检'])) slots.expense_type = '产前检查费'
   else if (includesAny(current, ['生育', '生孩子', '分娩'])) slots.expense_type = '生育医疗费'
+
+  if (includesAny(current, ['配偶', '妻子', '丈夫', '爱人'])) slots.family_relationship = '配偶'
+  else if (includesAny(current, ['父母', '父亲', '母亲', '爸爸', '妈妈'])) slots.family_relationship = '父母'
+  else if (includesAny(current, ['子女', '儿子', '女儿', '孩子'])) slots.family_relationship = '子女'
+  else if (includesAny(current, ['近亲属', '家人', '亲属'])) slots.family_relationship = '其他近亲属'
   return slots
 }
 
@@ -118,7 +130,8 @@ export function check_required_slots({ intent, slots }) {
     discharged: '您现在是准备住院、正在住院，还是已经出院？',
     insurance_type: '您参加的是职工医保还是城乡居民医保？',
     expense_type: '您咨询的是门诊、住院、产检还是生育医疗费用？',
-    applicant_type: '您是单位职工、灵活就业人员、城乡居民，还是为配偶咨询？'
+    applicant_type: '您是单位职工、灵活就业人员、城乡居民，还是为配偶咨询？',
+    family_relationship: '您准备与哪位近亲属建立家庭共济关系？'
   }
   return { complete: missing.length === 0, missing, nextQuestion: questions[missing[0]] || null }
 }
@@ -194,7 +207,8 @@ export function generate_material_checklist({ intent, slots }) {
     medical_expense_reimbursement: slots.expense_type === '门诊费用'
       ? [commonId, '医院收费票据', '门急诊费用清单', '处方底方或病历资料']
       : [commonId, '医院收费票据', '住院费用清单', '诊断证明或出院小结'],
-    maternity_medical_payment: [commonId, '医院收费票据', '费用清单', '门诊病历或出院小结等病历资料']
+    maternity_medical_payment: [commonId, '医院收费票据', '费用清单', '门诊病历或出院小结等病历资料'],
+    medical_family_mutual_aid: ['共济人登录并实名认证江苏医保云账号', '按“家庭共济—账户绑定”页面要求填写共济使用人信息']
   }
   return { intent, items: lists[intent] || [], note: '特殊情形可能需要补充材料，以参保地一次性告知为准。' }
 }

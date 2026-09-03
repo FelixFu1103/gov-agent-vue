@@ -38,6 +38,11 @@ test('rejects an explicit non-medical-insurance request instead of carrying prev
   assert.equal(classify_intent({ message: '我想办理营业执照', previousIntent: 'cross_region_medical_filing' }).intent, 'out_of_scope')
 })
 
+test('classifies family mutual aid and extracts the relative', () => {
+  assert.equal(classify_intent({ message: '怎么把医保个人账户共济给妈妈使用' }).intent, 'medical_family_mutual_aid')
+  assert.equal(extract_slots({ message: '我想给妈妈绑定家庭共济' }).family_relationship, '父母')
+})
+
 test('extracts medical slots from conversational context', () => {
   const slots = extract_slots({
     message: '我是医院转诊过去的，现在正在住院，还没有出院。',

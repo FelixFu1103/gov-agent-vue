@@ -21,7 +21,8 @@ const serviceCodes = {
   '10-cross-region-medical.md': 'cross_region_medical_filing',
   '11-medical-reimbursement.md': 'medical_expense_reimbursement',
   '31-resident-medical-enrollment.md': 'medical_resident_enrollment',
-  '32-maternity-medical-expense.md': 'maternity_medical_payment'
+  '32-maternity-medical-expense.md': 'maternity_medical_payment',
+  '33-family-mutual-aid.md': 'medical_family_mutual_aid'
 }
 let chunkCount = 0
 
