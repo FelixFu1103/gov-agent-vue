@@ -30,7 +30,16 @@ const intentDefinitions = {
     label: '职工医保个人账户家庭共济',
     filename: '33-family-mutual-aid.md',
     requiredSlots: ['insured_city', 'family_relationship']
-  }
+  },
+  medical_unit_enrollment: { label: '基本医疗保险单位参保登记', filename: '34-unit-enrollment.md', requiredSlots: ['insured_city'] },
+  medical_insured_info_change: { label: '基本医疗保险参保信息变更', filename: '35-insured-info-change.md', requiredSlots: ['insured_city', 'applicant_type'] },
+  medical_contribution_base_declaration: { label: '基本医疗保险缴费基数申报', filename: '36-contribution-base-declaration.md', requiredSlots: ['insured_city'] },
+  medical_insurance_info_query: { label: '基本医疗保险参保信息查询', filename: '37-insurance-info-query.md', requiredSlots: ['insured_city'] },
+  medical_personal_account_withdrawal: { label: '职工医保个人账户一次性支取', filename: '38-personal-account-withdrawal.md', requiredSlots: ['insured_city'] },
+  medical_insurance_transfer: { label: '基本医疗保险关系转移接续', filename: '39-insurance-transfer.md', requiredSlots: ['insured_city'] },
+  outpatient_chronic_special_disease: { label: '门诊慢特病待遇认定', filename: '40-outpatient-chronic-special.md', requiredSlots: ['insured_city', 'insurance_type'] },
+  dual_channel_drug_qualification: { label: '国谈药双通道及单独支付药品待遇认定', filename: '41-dual-channel-drug.md', requiredSlots: ['insured_city', 'insurance_type'] },
+  maternity_allowance_payment: { label: '生育津贴支付', filename: '42-maternity-allowance.md', requiredSlots: ['insured_city', 'applicant_type'] }
 }
 
 const sessionStore = new Map()
@@ -56,6 +65,15 @@ export function classify_intent({ message, previousIntent }) {
   const residentSignal = includesAny(text, ['居民医保', '居民医疗保险', '城乡医保', '城乡居民', '学生医保', '农村居民']) || (includesAny(text, ['居民', '学生', '无业', '没有工作', '没有单位']) && includesAny(text, ['医保', '医疗保险', '参保']))
   const employeeSignal = includesAny(text, ['职工医保', '员工医保', '单位参保', '灵活就业', '自由职业']) || (includesAny(text, ['公司', '企业', '单位', '员工', '职工', '入职']) && includesAny(text, ['医保', '医疗保险', '参保']))
 
+  if (includesAny(text, ['生育津贴', '护理假津贴', '产假津贴']) && !(text.includes('区别') && includesAny(text, ['医疗费', '医疗报销']))) add('maternity_allowance_payment', 1)
+  if (includesAny(text, ['双通道', '国谈药', '单独支付药品', '特药申请'])) add('dual_channel_drug_qualification', 0.99)
+  if (includesAny(text, ['门诊慢特病', '门慢', '门特', '慢性病认定', '特殊病认定', '特殊病待遇'])) add('outpatient_chronic_special_disease', 0.99)
+  if (includesAny(text, ['医保关系转移', '医保转移', '参保凭证', '转移接续']) || (includesAny(text, ['换城市', '换工作地', '转到']) && text.includes('医保'))) add('medical_insurance_transfer', 0.98)
+  if (includesAny(text, ['个人账户一次性支取', '医保余额取出', '医保余额提现', '医保账户清退']) || (includesAny(text, ['医保余额', '个人账户']) && includesAny(text, ['取出来', '支取', '清退', '放弃医保关系']))) add('medical_personal_account_withdrawal', 0.99)
+  if (includesAny(text, ['参保信息查询', '医保参保查询', '查询参保状态', '查询缴费记录']) || (includesAny(text, ['医保参保状态', '医保缴费记录', '职工医保信息']) && includesAny(text, ['查', '查询', '哪里']))) add('medical_insurance_info_query', 0.97)
+  if (includesAny(text, ['缴费基数申报', '医保基数申报', '申报医保基数']) || (includesAny(text, ['医保缴费基数', '职工工资花名册']) && includesAny(text, ['申报', '医保']))) add('medical_contribution_base_declaration', 0.99)
+  if (includesAny(text, ['参保信息变更', '医保信息变更', '姓名变更', '身份证号变更', '暂停参保', '终止参保']) || (includesAny(text, ['变更', '变化', '修改']) && includesAny(text, ['医保参保信息', '姓名', '身份信息']))) add('medical_insured_info_change', 0.97)
+  if (includesAny(text, ['单位参保登记', '单位医保开户', '企业医保开户', '单位首次参保']) || (includesAny(text, ['新公司', '社会组织']) && includesAny(text, ['医保', '参保']))) add('medical_unit_enrollment', 0.98)
   if (familyMutualAidSignal) add('medical_family_mutual_aid', 0.99)
   if (maternitySignal && includesAny(text, ['费', '报销', '支付', '医保', '保险', '材料', '申请', '提交'])) add('maternity_medical_payment', 0.98)
   if (reimbursementSignal) add('medical_expense_reimbursement', maternitySignal ? 0.86 : 0.96)
@@ -220,7 +238,16 @@ export function generate_material_checklist({ intent, slots }) {
       ? [commonId, '医院收费票据', '门急诊费用清单', '处方底方或病历资料']
       : [commonId, '医院收费票据', '住院费用清单', '诊断证明或出院小结'],
     maternity_medical_payment: [commonId, '医院收费票据', '费用清单', '门诊病历或出院小结等病历资料'],
-    medical_family_mutual_aid: ['共济人登录并实名认证江苏医保云账号', '按“家庭共济—账户绑定”页面要求填写共济使用人信息']
+    medical_family_mutual_aid: ['共济人登录并实名认证江苏医保云账号', '按“家庭共济—账户绑定”页面要求填写共济使用人信息'],
+    medical_unit_enrollment: ['单位成立证明或统一社会信用代码证书（可共享获取时免交）', '加盖公章的单位参保信息登记表', '首次参保的单位开户银行账户信息'],
+    medical_insured_info_change: ['对应的参保信息变更登记表或有效身份证件', '变更关键信息所需的对应辅助材料'],
+    medical_contribution_base_declaration: ['加盖公章的医保缴费基数申报表', '人员缴费明细或职工工资发放花名册'],
+    medical_insurance_info_query: ['医保电子凭证、有效身份证件或社会保障卡'],
+    medical_personal_account_withdrawal: [commonId, '与死亡继承、主动放弃医保关系或养老金清退情形对应的证明材料'],
+    medical_insurance_transfer: [commonId, '转出地开具的纸质或电子《参保凭证》'],
+    outpatient_chronic_special_disease: [commonId, '病历或检查资料，包括体检报告、出院小结、门诊病历等'],
+    dual_channel_drug_qualification: [commonId, '双通道及单独支付药品用药申请表', '疾病诊断材料'],
+    maternity_allowance_payment: [commonId, '门诊病历、出院小结等病历资料']
   }
   return { intent, items: lists[intent] || [], note: '特殊情形可能需要补充材料，以参保地一次性告知为准。' }
 }

@@ -7,7 +7,7 @@ const messageBox = ref(null)
 const serviceError = ref('')
 const conversationId = crypto.randomUUID()
 const messages = ref([
-  { id: 1, role: 'assistant', text: '您好，我是江苏医保智能助手。目前可以咨询职工医保参保、居民医保参保、异地就医备案、医疗费用零星报销、生育医疗费支付和医保个人账户家庭共济。请告诉我您的参保城市和想办理的事项。' }
+  { id: 1, role: 'assistant', text: '您好，我是江苏医保智能助手。目前覆盖参保登记与变更、医保关系转移、信息查询、异地就医、费用报销、门诊慢特病、双通道药品、生育待遇和家庭共济等15项业务。请告诉我您的参保城市和想办理的事项。' }
 ])
 
 const quickQuestions = ['单位给员工办理职工医保需要什么材料？', '没有工作怎么参加居民医保？', '去外省看病如何备案？', '住院没有直接结算怎么报销？', '生孩子医疗费怎么报销？', '怎么给父母办理医保家庭共济？']
@@ -73,7 +73,7 @@ function handleKeydown(event) {
 
     <main>
       <header class="top"><div><h1>江苏医保智能咨询</h1><p>识别办理事项，结合上下文检索官方医保资料</p></div><div class="status"><i></i>医保服务正常</div></header>
-      <div class="notice">当前覆盖6项江苏医保高频业务。政策和各市执行口径可能调整，具体办理以参保地医保部门最新规定为准。</div>
+      <div class="notice">当前覆盖15项江苏医保高频业务。政策和各市执行口径可能调整，具体办理以参保地医保部门最新规定为准。</div>
 
       <div class="workspace">
         <section class="chat" aria-label="智能咨询对话">
@@ -93,7 +93,7 @@ function handleKeydown(event) {
 
         <aside class="panel">
           <section class="card"><h2>常见问题</h2><div class="quick"><button v-for="item in quickQuestions" :key="item" @click="ask(item)">{{ item }}</button></div></section>
-          <section class="card"><h2>医保 Agent</h2><div class="metric"><span>覆盖地区</span><strong>江苏省</strong></div><div class="metric"><span>核心事项</span><strong>6 项</strong></div><div class="metric"><span>知识资料</span><strong>医保 6 份</strong></div><div class="metric"><span>检索方式</span><strong>混合 RAG</strong></div></section>
+          <section class="card"><h2>医保 Agent</h2><div class="metric"><span>覆盖地区</span><strong>江苏省</strong></div><div class="metric"><span>核心事项</span><strong>15 项</strong></div><div class="metric"><span>知识资料</span><strong>医保 15 份</strong></div><div class="metric"><span>检索方式</span><strong>混合 RAG</strong></div></section>
         </aside>
       </div>
     </main>

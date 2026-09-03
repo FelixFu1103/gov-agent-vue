@@ -22,7 +22,16 @@ const serviceCodes = {
   '11-medical-reimbursement.md': 'medical_expense_reimbursement',
   '31-resident-medical-enrollment.md': 'medical_resident_enrollment',
   '32-maternity-medical-expense.md': 'maternity_medical_payment',
-  '33-family-mutual-aid.md': 'medical_family_mutual_aid'
+  '33-family-mutual-aid.md': 'medical_family_mutual_aid',
+  '34-unit-enrollment.md': 'medical_unit_enrollment',
+  '35-insured-info-change.md': 'medical_insured_info_change',
+  '36-contribution-base-declaration.md': 'medical_contribution_base_declaration',
+  '37-insurance-info-query.md': 'medical_insurance_info_query',
+  '38-personal-account-withdrawal.md': 'medical_personal_account_withdrawal',
+  '39-insurance-transfer.md': 'medical_insurance_transfer',
+  '40-outpatient-chronic-special.md': 'outpatient_chronic_special_disease',
+  '41-dual-channel-drug.md': 'dual_channel_drug_qualification',
+  '42-maternity-allowance.md': 'maternity_allowance_payment'
 }
 let chunkCount = 0
 

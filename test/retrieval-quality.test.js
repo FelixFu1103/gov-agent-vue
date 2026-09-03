@@ -5,8 +5,8 @@ import { verifyGeneratedAnswer } from '../server/citation-verifier.js'
 import { retrievalCases } from '../evaluation/retrieval-cases.js'
 import { classify_intent } from '../server/agent-tools.js'
 
-test('contains 120 fixed retrieval evaluation cases', () => {
-  assert.equal(retrievalCases.length, 120)
+test('contains 165 fixed retrieval evaluation cases', () => {
+  assert.equal(retrievalCases.length, 165)
   const correct = retrievalCases.filter(item => classify_intent({ message: item.question }).intent === item.expectedIntent)
   assert.ok(correct.length / retrievalCases.length >= 0.95)
 })

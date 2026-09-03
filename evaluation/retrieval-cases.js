@@ -58,6 +58,42 @@ const groups = {
       '家庭共济绑定需要什么信息', '职工医保共济给近亲属怎么操作', '医保共济使用人要出示谁的医保码', '家庭共济能不能跨省使用',
       '江苏医疗共济支持哪些亲属', '给妈妈绑定医保共济的流程', '家庭共济绑定失败怎么办', '个人账户家庭共济使用范围'
     ]
+  },
+  medical_unit_enrollment: {
+    document: '34-unit-enrollment.md',
+    questions: ['新公司怎么开通单位医保', '企业医保开户需要什么材料', '单位首次参保登记怎么办', '社会组织办理医保参保', '单位医保开户多久办好']
+  },
+  medical_insured_info_change: {
+    document: '35-insured-info-change.md',
+    questions: ['医保参保信息怎么变更', '姓名变化后医保信息怎么改', '居民医保暂停参保怎么办', '单位医保信息变更材料', '身份证号变更后怎么修改医保']
+  },
+  medical_contribution_base_declaration: {
+    document: '36-contribution-base-declaration.md',
+    questions: ['单位怎么申报医保缴费基数', '医保基数申报要什么材料', '职工工资花名册用于医保申报吗', '企业申报医保基数多久完成', '缴费基数申报是否收费']
+  },
+  medical_insurance_info_query: {
+    document: '37-insurance-info-query.md',
+    questions: ['怎么查询医保参保状态', '医保缴费记录在哪里查', '参保信息查询需要什么证件', '单位如何查询职工医保信息', '医保参保查询多久办好']
+  },
+  medical_personal_account_withdrawal: {
+    document: '38-personal-account-withdrawal.md',
+    questions: ['医保个人账户余额能取出来吗', '参保人死亡医保余额怎么支取', '放弃医保关系怎么取个人账户', '医保账户清退需要什么材料', '个人账户一次性支取多久']
+  },
+  medical_insurance_transfer: {
+    document: '39-insurance-transfer.md',
+    questions: ['换城市工作医保怎么转移', '医保关系转移接续怎么办', '参保凭证在哪里开', '医保从南京转到苏州要什么材料', '医保转移需要多长时间']
+  },
+  outpatient_chronic_special_disease: {
+    document: '40-outpatient-chronic-special.md',
+    questions: ['门诊慢特病怎么申请', '门慢认定需要哪些病历', '特殊病待遇在哪里办理', '居民医保能申请门特吗', '慢性病认定是否收费']
+  },
+  dual_channel_drug_qualification: {
+    document: '41-dual-channel-drug.md',
+    questions: ['双通道药品怎么申请', '国谈药待遇认定需要什么', '特药申请表在哪里用', '单独支付药品多久审核', '双通道责任医师怎么办理']
+  },
+  maternity_allowance_payment: {
+    document: '42-maternity-allowance.md',
+    questions: ['生育津贴怎么申请', '护理假津贴男职工能领吗', '生育津贴需要什么病历', '产假津贴多久支付', '男职工护理假生育津贴怎么申请']
   }
 }
 
