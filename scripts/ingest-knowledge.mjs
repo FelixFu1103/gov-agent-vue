@@ -35,6 +35,8 @@ try {
   await pool.query('CREATE INDEX IF NOT EXISTS knowledge_documents_effective_dates_idx ON knowledge_documents(effective_from, effective_to)')
   await pool.query(`ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector(${embeddingDimensions})`)
   await pool.query('CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)')
+  const activeExternalIds = documents.map(document => document.filename)
+  await pool.query("UPDATE knowledge_documents SET status = 'archived', updated_at = NOW() WHERE NOT (external_id = ANY($1::text[]))", [activeExternalIds])
   for (const document of documents) {
     const client = await pool.connect()
     try {

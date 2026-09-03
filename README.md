@@ -1,63 +1,65 @@
-# 政务智答 Vue 原型
+# 江苏医保 Agent
 
-基于 Vue 3 + Vite 的政务问答网页，后端通过 DeepSeek Chat API 生成回答。API Key 仅保存在服务端环境变量中，不会进入浏览器代码。
+面向江苏省基本医疗保险业务的智能咨询 Agent。前端使用 Vue 3 + Vite，后端使用 Node.js；DeepSeek 负责依据证据组织回答，PostgreSQL + pgvector、Ollama + bge-m3 负责本地混合知识检索。
+
+> 当前是学习与验证版本，不代表医保经办机构。政策和各市执行口径可能调整，最终以参保地医保部门最新规定为准。
+
+## 当前覆盖范围
+
+系统只回答知识库已经完成闭环的5项江苏医保业务：
+
+1. 职工基本医疗保险参保登记
+2. 城乡居民基本医疗保险参保登记
+3. 江苏省基本医疗保险异地就医备案
+4. 江苏省门诊与住院医疗费用手工（零星）报销
+5. 江苏省生育医疗费支付
+
+对应资料位于 `knowledge/documents/`，正文包含适用对象、办理材料、办理渠道、流程、时限、回答边界、核验日期和江苏省医疗保障局官方来源。其他政务事项和尚未进入知识库的医保事项应明确提示“当前未覆盖”，不能依靠模型常识拼凑答案。
+
+## Agent 工作流
+
+每轮问题按固定、可测试的受控流程执行8个工具：
+
+1. `classify_intent`：识别5类医保事项，处理多意图冲突。
+2. `extract_slots`：提取参保城市、就医城市、参保险种、人员类型和办理阶段。
+3. `update_session_state`：合并多轮对话状态，原型状态保留30分钟。
+4. `check_required_slots`：检查必要信息，每次只生成一个优先追问。
+5. `search_policy`：执行医保政策混合检索。
+6. `get_service_guide`：按照标准事项编码取得办事指南。
+7. `assess_evidence`：检查资料是否存在、是否过期、信息是否完整。
+8. `generate_material_checklist`：按照事项和人员类别生成材料清单。
+
+`POST /api/chat` 会返回 `agent` 调试字段，包括意图、置信度、槽位、缺失信息、证据判断、引用检查和工具轨迹。当前属于确定性工作流型 Agent，不是让大模型自由调用任意工具的开放式 Agent。
+
+## 混合 RAG
+
+知识入库和查询流程：
+
+```text
+医保 Markdown资料
+→ 按标题进行章节感知切片
+→ bge-m3生成1024维向量
+→ PostgreSQL + pgvector存储
+→ 事项/地区/状态/有效期过滤
+→ pg_trgm关键词召回Top-20 + 向量召回Top-20
+→ RRF融合和文档去重
+→ 最低相关度过滤
+→ DeepSeek依据证据生成回答
+→ 电话、金额、比例和时限引用校验
+```
+
+数据库不可用时会降级为本地 Markdown 关键词检索。DeepSeek API Key只保存在服务端 `.env` 中，不会发送给浏览器；bge-m3在本机运行，知识正文不会因为向量化发送给第三方。
+
+## 本地运行
+
+前置条件：Node.js、Docker Desktop。
 
 ```bash
 npm install
-npm run build
-
-# 创建本地密钥文件（.env 已被 Git 忽略）
 cp .env.example .env
-# 然后打开 .env，把占位内容替换成你的 DeepSeek API Key
-npm run dev
 ```
 
-打开 Vite 输出的本地网址即可使用。`npm run dev` 会同时启动 Vue 开发服务器和后端 API。
-
-生产运行：
-
-```bash
-npm run build
-npm start
-```
-
-可选环境变量：
-
-- `DEEPSEEK_MODEL`：默认 `deepseek-chat`
-- `PORT`：后端端口，默认 `8787`
-
-当前版本已接入首批官方门户事项索引资料，但尚未收录每个事项的完整办事指南，因此所有回答仍仅供参考。
-
-## 江苏政务知识库
-
-`knowledge/documents/` 中包含 32 份江苏政务资料。后端会在每次提问时执行本地检索，将当前最相关的主资料连同官方来源传给 DeepSeek，避免低相关资料污染回答。
-
-医保已完成首批 5 项纵向闭环：职工医保参保、居民医保参保、异地就医备案、门诊/住院零星报销、生育医疗费支付。这 5 项包含适用对象、材料、渠道、流程、时限、回答边界和江苏省医保局原始依据；其他主题目前仍以事项索引为主。
-
-运行 `npm test` 可执行医保检索回归测试；运行 `npm run eval:retrieval` 可用本地数据库和 bge-m3 执行 100 条固定问题的端到端评测。
-
-## 医保 Agent 工具循环
-
-每次聊天请求会按顺序执行 8 个可测试工具：
-
-1. `classify_intent`：识别当前 5 类医保意图，并在省略主语的后续轮次延续已有意图。
-2. `extract_slots`：从当前消息和历史中提取参保城市、就医城市、参保险种、人员类型和办理阶段。
-3. `update_session_state`：使用前端生成的 `conversationId` 在服务端合并会话状态；原型状态保留 30 分钟。
-4. `check_required_slots`：按事项检查必要字段，并且每次只生成一个最优先的追问。
-5. `search_policy`：查询本地政策知识并返回来源、版本和核验日期。
-6. `get_service_guide`：按照标准事项编码取得完整办事指南。
-7. `assess_evidence`：检查指南是否存在、是否超过一年未核验以及个性化信息是否完整。
-8. `generate_material_checklist`：根据意图和人员类别生成材料清单。
-
-`POST /api/chat` 的响应中包含 `agent` 调试字段，可查看意图、置信度、已收集槽位、缺失槽位、证据判断和本轮工具轨迹。`GET /api/health` 会返回已注册工具名称。
-
-当前会话状态使用进程内存，适合单机原型；生产环境应替换为 Redis 或数据库，以支持多实例、持久化、加密和过期治理。
-
-## PostgreSQL + pgvector 知识库
-
-项目支持数据库优先、本地 Markdown 自动降级。数据库保存事项编码、政策状态、有效期、版本、来源、核验日期、正文分块和向量。导入时按照 Markdown 标题进行章节感知切片；查询时分别取得关键词与向量 Top-20，通过 RRF 融合去重，并按事项、地区、政策状态和有效期过滤。低于最小关键词及向量相关度的结果不会进入回答上下文。
-
-安装 Docker Desktop 后运行：
+在 `.env` 中填写 `DEEPSEEK_API_KEY`，然后执行：
 
 ```bash
 npm run db:start
@@ -66,39 +68,37 @@ npm run db:ingest
 npm run dev
 ```
 
-检查 `GET /api/health`：
+`db:model` 只需在首次下载或更换模型时运行。生产方式：
 
-```json
-{
-  "database": {
-    "connected": true,
-    "documents": 32,
-    "vectorEnabled": true,
-    "vectorizedChunks": 54
-  }
-}
+```bash
+npm run build
+npm start
 ```
 
-默认通过 Docker 中的 Ollama 和 `bge-m3` 在本机生成1024维向量，知识正文不会发送给第三方。首次使用需要运行 `npm run db:model` 下载模型，然后运行 `npm run db:ingest`。
+## 知识库维护
 
-DeepSeek 生成回答后，服务端还会进行一次证据校验：对于检索片段不支持的具体电话、金额、比例或办理时限，系统会移除对应表述并在调试信息中给出 `citationVerification` 结果。该校验是确定性安全网，不能替代人工政策审核。
-
-当前固定评测集覆盖 5 个医保事项、共 100 种问法，输出意图准确率、Top-1 准确率与 Top-3 召回率。新增或修改知识资料后，应重新执行：
+新增或修改医保 Markdown 后必须重新入库。导入脚本会更新当前文件、重新生成切片和向量，并把已经从目录移除的旧资料标记为 `archived`：
 
 ```bash
 npm run db:ingest
+```
+
+可通过 `GET /api/health` 检查数据库连接、已发布文档数、向量状态和 Agent 工具。
+
+## 测试与评测
+
+```bash
+npm test
 npm run eval:retrieval
+npm run build
 ```
 
-如需改用云端 OpenAI 兼容的 Embedding 服务，可在 `.env` 修改：
+固定评测集位于 `evaluation/retrieval-cases.js`，覆盖5项医保业务、100种问法，输出意图准确率、Top-1准确率和Top-3召回率。当前固定集的三项指标均为100%，这不等于真实生产准确率；仍需持续加入真实用户问法、错别字、越界问题、多轮对话和对抗样本。
 
-```dotenv
-EMBEDDING_API_URL=https://your-provider.example/v1/embeddings
-EMBEDDING_API_KEY=your_key
-EMBEDDING_MODEL=your_1536_dimension_model
-EMBEDDING_DIMENSIONS=1536
-```
+## 生产化待办
 
-然后再次执行 `npm run db:ingest` 生成并写入向量。`EMBEDDING_DIMENSIONS` 必须与模型实际输出一致；DeepSeek Chat Key 只用于生成回答，不能直接替代 Embedding 服务。
-
-数据库不可用或没有导入数据时，Agent 会继续使用 `knowledge/documents/`，并在服务端日志和健康检查中标明降级状态。
+- 使用 Redis 或数据库保存加密后的会话状态
+- 增加片段级 Reranker 与逐结论引用
+- 建立政策增量更新、审核、发布、失效和回滚流程
+- 增加敏感信息识别、权限控制、审计日志和人工转接
+- 建立真实标注集及检索、回答、延迟和失败率监控

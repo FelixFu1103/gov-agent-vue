@@ -98,7 +98,11 @@ export async function createKnowledgeDatabase() {
     },
     async health() {
       const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM knowledge_documents WHERE status = $1', ['published'])
-      const vectorResult = await pool.query('SELECT COUNT(embedding)::int AS count FROM knowledge_chunks')
+      const vectorResult = await pool.query(`
+        SELECT COUNT(kc.embedding)::int AS count
+        FROM knowledge_chunks kc
+        JOIN knowledge_documents kd ON kd.id = kc.document_id
+        WHERE kd.status = 'published'`)
       return { connected: true, documents: rows[0].count, vectorEnabled: vectorResult.rows[0].count > 0, vectorizedChunks: vectorResult.rows[0].count }
     }
   }

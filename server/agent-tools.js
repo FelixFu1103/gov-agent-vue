@@ -43,6 +43,7 @@ export function classify_intent({ message, previousIntent }) {
   const text = message.replace(/\s+/g, '')
   const candidates = []
   const add = (intent, score) => candidates.push({ intent, score })
+  const explicitlyOutsideScope = includesAny(text, ['公积金', '身份证', '户口', '户籍', '营业执照', '企业开办', '结婚登记', '驾驶证', '养老保险', '失业保险', '工伤认定'])
   const reimbursementSignal = includesAny(text, ['报销', '零星报销', '手工报销', '现金垫付', '没有直接结算', '未直接结算', '费用未结算', '发票', '费用清单'])
   const maternitySignal = includesAny(text, ['生育', '生孩子', '分娩', '产检'])
   const crossRegionSignal = includesAny(text, ['备案', '跨省', '外省', '异地就医', '异地安置', '常驻异地', '异地工作', '转诊']) || /(去|到|在).{2,8}(看病|就医|住院)/.test(text)
@@ -55,6 +56,7 @@ export function classify_intent({ message, previousIntent }) {
   if (residentSignal) add('medical_resident_enrollment', reimbursementSignal ? 0.84 : 0.94)
   if (employeeSignal && includesAny(text, ['参保', '参加', '登记', '办理', '怎么交', '材料', '证件', '开户', '新增', '指南'])) add('medical_employee_enrollment', reimbursementSignal ? 0.82 : 0.93)
   candidates.sort((a, b) => b.score - a.score)
+  if (!candidates.length && explicitlyOutsideScope) return { intent: 'out_of_scope', confidence: 0.99, alternatives: [] }
   if (!candidates.length && previousIntent) candidates.push({ intent: previousIntent, score: 0.72 })
   return {
     intent: candidates[0]?.intent || 'unknown',

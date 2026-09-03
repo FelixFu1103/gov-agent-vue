@@ -7,7 +7,7 @@ const messageBox = ref(null)
 const serviceError = ref('')
 const conversationId = crypto.randomUUID()
 const messages = ref([
-  { id: 1, role: 'assistant', text: '您好，我是政务服务智能助手。您可以咨询社保、公积金、户籍、企业开办等事项。请告诉我您想办理什么业务？' }
+  { id: 1, role: 'assistant', text: '您好，我是江苏医保智能助手。目前可以咨询职工医保参保、居民医保参保、异地就医备案、医疗费用零星报销和生育医疗费支付。请告诉我您的参保城市和想办理的事项。' }
 ])
 
 const quickQuestions = ['单位给员工办理职工医保需要什么材料？', '没有工作怎么参加居民医保？', '去外省看病如何备案？', '住院没有直接结算怎么报销？', '生孩子医疗费怎么报销？']
@@ -65,35 +65,35 @@ function handleKeydown(event) {
 <template>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand"><div class="emblem">政</div><div><strong>政务智答</strong><small>Government Service AI</small></div></div>
-      <div class="side-title">服务中心</div>
-      <nav class="nav"><button class="active">智能咨询</button><button>办事指南</button><button>政策查询</button><button>咨询记录</button></nav>
+      <div class="brand"><div class="emblem">医</div><div><strong>江苏医保 Agent</strong><small>Jiangsu Medical Insurance AI</small></div></div>
+      <div class="side-title">医保服务</div>
+      <nav class="nav"><button class="active">医保咨询</button><button>支持事项</button><button>政策依据</button><button>咨询记录</button></nav>
       <div class="safe"><strong>隐私提示</strong>请勿在对话中发送身份证号、银行卡号、密码等敏感信息。</div>
     </aside>
 
     <main>
-      <header class="top"><div><h1>政务服务智能咨询</h1><p>办事问题，一问即达</p></div><div class="status"><i></i>服务正常</div></header>
-      <div class="notice">医保试点版：已接入江苏省医保局官方办事指南，政策可能调整，具体办理以参保地医保部门最新规定为准。</div>
+      <header class="top"><div><h1>江苏医保智能咨询</h1><p>识别办理事项，结合上下文检索官方医保资料</p></div><div class="status"><i></i>医保服务正常</div></header>
+      <div class="notice">当前覆盖5项江苏医保高频业务。政策和各市执行口径可能调整，具体办理以参保地医保部门最新规定为准。</div>
 
       <div class="workspace">
         <section class="chat" aria-label="智能咨询对话">
           <header class="chat-head"><strong>智能助手</strong><span>{{ serviceError ? '服务需要检查' : 'DeepSeek API' }}</span></header>
           <div ref="messageBox" class="messages" aria-live="polite">
             <div v-for="message in messages" :key="message.id" class="row" :class="{ user: message.role === 'user' }">
-              <div class="avatar">{{ message.role === 'user' ? '我' : '政' }}</div>
+              <div class="avatar">{{ message.role === 'user' ? '我' : '医' }}</div>
               <div class="bubble"><p>{{ message.text }}</p><div v-if="message.sources?.length" class="source">官方依据：<a v-for="(item, index) in message.sources" :key="item.url" :href="item.url" target="_blank" rel="noopener noreferrer">{{ index ? '；' : '' }}{{ item.title }}</a></div><div v-else-if="message.source" class="source">{{ message.source }}</div></div>
             </div>
-            <div v-if="loading" class="row"><div class="avatar">政</div><div class="bubble typing">AI 正在整理回答…</div></div>
+            <div v-if="loading" class="row"><div class="avatar">医</div><div class="bubble typing">正在检索江苏医保资料并整理回答…</div></div>
           </div>
           <form class="composer" @submit.prevent="ask()">
-            <div class="input-wrap"><textarea v-model="question" rows="2" placeholder="例如：办理营业执照需要哪些材料？" aria-label="输入政务咨询问题" @keydown="handleKeydown"></textarea><button :disabled="loading || !question.trim()" type="submit">发送</button></div>
-            <p class="hint">按 Enter 发送，Shift + Enter 换行 · AI 回答可能有误，请以办事部门最新规定为准</p>
+            <div class="input-wrap"><textarea v-model="question" rows="2" placeholder="例如：南京职工医保去上海住院如何备案？" aria-label="输入江苏医保咨询问题" @keydown="handleKeydown"></textarea><button :disabled="loading || !question.trim()" type="submit">发送</button></div>
+            <p class="hint">按 Enter 发送，Shift + Enter 换行 · 请勿发送身份证号等敏感信息 · 以参保地医保部门最新规定为准</p>
           </form>
         </section>
 
         <aside class="panel">
           <section class="card"><h2>常见问题</h2><div class="quick"><button v-for="item in quickQuestions" :key="item" @click="ask(item)">{{ item }}</button></div></section>
-          <section class="card"><h2>服务概况</h2><div class="metric"><span>AI 服务</span><strong>DeepSeek API</strong></div><div class="metric"><span>政策知识库</span><strong>江苏 32 份</strong></div><div class="metric"><span>医保闭环</span><strong>首批 5 项</strong></div><div class="metric"><span>对话模式</span><strong>检索增强</strong></div></section>
+          <section class="card"><h2>医保 Agent</h2><div class="metric"><span>覆盖地区</span><strong>江苏省</strong></div><div class="metric"><span>核心事项</span><strong>5 项</strong></div><div class="metric"><span>知识资料</span><strong>医保 5 份</strong></div><div class="metric"><span>检索方式</span><strong>混合 RAG</strong></div></section>
         </aside>
       </div>
     </main>

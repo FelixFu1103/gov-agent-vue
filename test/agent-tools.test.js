@@ -34,6 +34,10 @@ test('classifies cross-region medical intent', () => {
   assert.equal(classify_intent({ message: '南京医保去上海住院怎么办' }).intent, 'cross_region_medical_filing')
 })
 
+test('rejects an explicit non-medical-insurance request instead of carrying previous intent', () => {
+  assert.equal(classify_intent({ message: '我想办理营业执照', previousIntent: 'cross_region_medical_filing' }).intent, 'out_of_scope')
+})
+
 test('extracts medical slots from conversational context', () => {
   const slots = extract_slots({
     message: '我是医院转诊过去的，现在正在住院，还没有出院。',
