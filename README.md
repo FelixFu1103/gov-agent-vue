@@ -45,11 +45,27 @@
 → pg_trgm关键词召回Top-20 + 向量召回Top-20
 → RRF融合和文档去重
 → 最低相关度过滤
+→ 可选Reranker精排
 → DeepSeek依据证据生成回答
 → 电话、金额、比例和时限引用校验
 ```
 
 数据库不可用时会降级为本地 Markdown 关键词检索。DeepSeek API Key只保存在服务端 `.env` 中，不会发送给浏览器；bge-m3在本机运行，知识正文不会因为向量化发送给第三方。
+
+## Reranker精排
+
+RRF负责融合关键词和向量排名，Reranker进一步读取“问题＋候选片段”并重新判断相关性。项目兼容返回 `results[{ index, relevance_score }]` 的 Jina/Cohere 风格 `/rerank` API：
+
+```dotenv
+RERANK_API_URL=https://your-provider.example/v1/rerank
+RERANK_API_KEY=your_rerank_api_key_here
+RERANK_MODEL=BAAI/bge-reranker-v2-m3
+RERANK_TIMEOUT_MS=15000
+```
+
+配置后，数据库先通过混合检索取得至少10个候选，再交给Reranker精排并保留最终3条。未配置、超时或接口异常时自动回退到RRF顺序，问答不会因此中断。`GET /api/health` 会显示Reranker是否启用；`POST /api/chat` 的 `agent.reranker` 会显示本轮是否实际完成精排。
+
+当前提交只增加Reranker能力和接口适配，不会自动下载额外的大模型。若使用本地 `bge-reranker-v2-m3`，需要另行部署提供 `/rerank` HTTP接口的推理服务；Ollama现有的 `/api/embed` 只用于Embedding，不能直接替代Cross-Encoder精排接口。
 
 ## 本地运行
 

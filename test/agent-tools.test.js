@@ -88,6 +88,28 @@ test('prefers database retrieval when the vector store is available', async () =
   assert.deepEqual(policies, databaseResult)
 })
 
+test('reranks a wider candidate set after database retrieval', async () => {
+  const databaseResult = [
+    { documentId: 'rrf-first', title: '初始第一', body: '一般内容' },
+    { documentId: 'rerank-first', title: '精排第一', body: '与问题直接相关' }
+  ]
+  const policies = await search_policy({
+    documents,
+    query: '目标问题',
+    limit: 1,
+    databaseSearch: async (_query, options) => {
+      assert.equal(options.limit, 10)
+      return databaseResult
+    },
+    rerank: async (_query, candidates, options) => {
+      assert.equal(candidates.length, 2)
+      assert.equal(options.topN, 1)
+      return [{ ...candidates[1], rerankScore: 0.9 }]
+    }
+  })
+  assert.equal(policies[0].documentId, 'rerank-first')
+})
+
 test('assesses evidence and generates a personalized checklist', () => {
   const guide = get_service_guide({ documents, intent: 'cross_region_medical_filing' })
   const slots = { insured_city: '南京', medical_city: '上海', person_type: '异地转诊人员', discharged: false }

@@ -5,11 +5,13 @@ import { loadKnowledge } from './knowledge.js'
 import { agentToolDefinitions, runAgentTools } from './agent-tools.js'
 import { createKnowledgeDatabase } from './database.js'
 import { verifyGeneratedAnswer } from './citation-verifier.js'
+import { createKnowledgeReranker } from './reranker.js'
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
 const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
 const knowledgeRoot = resolve('knowledge/documents')
+const knowledgeReranker = createKnowledgeReranker()
 
 const instructions = `你是江苏医保智能咨询 Agent，仅处理江苏省基本医疗保险相关咨询。
 请使用简洁、准确、易懂的中文回答。始终回答用户最新一轮问题，并结合历史对话中已经确认的城市、参保险种、人员身份和办理阶段，不要重复询问已经给出的信息。
@@ -115,7 +117,8 @@ async function handleChat(request, response) {
     message,
     history,
     documents: knowledgeDocuments,
-    databaseSearch: knowledgeDatabase?.search
+    databaseSearch: knowledgeDatabase?.search,
+    rerank: knowledgeReranker.enabled ? knowledgeReranker.rerank : null
   })
   const matches = agent.policies.slice(0, 1)
   const context = matches.length
@@ -168,6 +171,7 @@ async function handleChat(request, response) {
         missingSlots: agent.slotCheck.missing,
         evidence: agent.evidence,
         citationVerification: { passed: verification.passed, removedClaims: verification.unsupportedClaims },
+        reranker: { enabled: knowledgeReranker.enabled, model: knowledgeReranker.model, applied: matches.some(document => Number.isFinite(document.rerankScore)) },
         tools: agent.trace
       },
       sources: matches.map(document => ({ title: document.title, department: document.department, url: document.source, documentUrl: document.sourceDocument }))
@@ -206,7 +210,7 @@ createServer(async (request, response) => {
   if (request.method === 'POST' && request.url === '/api/chat') return handleChat(request, response)
   if (request.method === 'GET' && request.url === '/api/health') {
     const database = knowledgeDatabase ? await knowledgeDatabase.health() : { connected: false, documents: 0, vectorEnabled: false }
-    return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model, knowledgeDocuments: knowledgeDocuments.length, database, agentTools: agentToolDefinitions })
+    return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model, knowledgeDocuments: knowledgeDocuments.length, database, reranker: { enabled: knowledgeReranker.enabled, model: knowledgeReranker.model }, agentTools: agentToolDefinitions })
   }
   if (request.method === 'GET' || request.method === 'HEAD') return serveStatic(request, response)
   return sendJson(response, 405, { error: '不支持的请求方法' })

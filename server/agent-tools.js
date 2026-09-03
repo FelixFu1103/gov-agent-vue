@@ -157,12 +157,23 @@ export function getSessionState(conversationId) {
   return state || null
 }
 
-export async function search_policy({ documents, query, limit = 3, intent, slots = {}, databaseSearch }) {
-  if (databaseSearch) {
-    const results = await databaseSearch(query, { limit, intent: !intent || intent === 'unknown' ? null : intent, region: slots.insured_city || null })
-    if (results.length) return results
+export async function search_policy({ documents, query, limit = 3, intent, slots = {}, databaseSearch, rerank }) {
+  const candidateLimit = Math.max(10, limit * 4)
+  const finish = async candidates => {
+    if (!rerank || candidates.length < 2) return candidates.slice(0, limit)
+    try {
+      const reranked = await rerank(query, candidates, { topN: limit })
+      return reranked.length ? reranked : candidates.slice(0, limit)
+    } catch (error) {
+      console.warn('Reranker unavailable, using RRF order:', error.message)
+      return candidates.slice(0, limit)
+    }
   }
-  return searchKnowledge(documents, query, limit).map(document => ({
+  if (databaseSearch) {
+    const results = await databaseSearch(query, { limit: candidateLimit, intent: !intent || intent === 'unknown' ? null : intent, region: slots.insured_city || null })
+    if (results.length) return finish(results)
+  }
+  const candidates = searchKnowledge(documents, query, candidateLimit).map(document => ({
     documentId: document.filename,
     title: document.title,
     department: document.department,
@@ -173,6 +184,7 @@ export async function search_policy({ documents, query, limit = 3, intent, slots
     sourceDocument: document.source_document,
     body: document.body
   }))
+  return finish(candidates)
 }
 
 export function get_service_guide({ documents, intent }) {
@@ -213,14 +225,14 @@ export function generate_material_checklist({ intent, slots }) {
   return { intent, items: lists[intent] || [], note: '特殊情形可能需要补充材料，以参保地一次性告知为准。' }
 }
 
-export async function runAgentTools({ conversationId, message, history, documents, databaseSearch }) {
+export async function runAgentTools({ conversationId, message, history, documents, databaseSearch, rerank }) {
   const previous = getSessionState(conversationId)
   const intentResult = classify_intent({ message, previousIntent: previous?.intent })
   const slots = extract_slots({ message, history, existingSlots: previous?.slots })
   const state = update_session_state({ conversationId, intentResult, slots })
   const slotCheck = check_required_slots({ intent: state.intent, slots: state.slots })
   const query = buildRetrievalQuery(history, message)
-  const policies = await search_policy({ documents, query, intent: state.intent, slots: state.slots, databaseSearch })
+  const policies = await search_policy({ documents, query, intent: state.intent, slots: state.slots, databaseSearch, rerank })
   const guide = get_service_guide({ documents, intent: state.intent })
   const evidence = assess_evidence({ intent: state.intent, guide, slots: state.slots })
   const checklist = generate_material_checklist({ intent: state.intent, slots: state.slots })
