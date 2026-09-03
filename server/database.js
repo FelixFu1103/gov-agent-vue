@@ -10,16 +10,20 @@ export async function createEmbedding(text) {
   const url = process.env.EMBEDDING_API_URL
   const apiKey = process.env.EMBEDDING_API_KEY
   const model = process.env.EMBEDDING_MODEL
-  if (!url || !apiKey || !model) return null
+  const dimensions = Number(process.env.EMBEDDING_DIMENSIONS || 1024)
+  if (!url || !model) return null
+  const isOllama = /\/api\/embed\/?$/.test(url)
   const response = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, input: text, dimensions: 1536 }),
+    headers: { ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}), 'Content-Type': 'application/json' },
+    body: JSON.stringify(isOllama ? { model, input: text } : { model, input: text, dimensions }),
     signal: AbortSignal.timeout(30_000)
   })
   const result = await response.json()
-  if (!response.ok || !Array.isArray(result.data?.[0]?.embedding)) throw new Error(`Embedding API error: ${response.status}`)
-  return result.data[0].embedding
+  const embedding = isOllama ? result.embeddings?.[0] : result.data?.[0]?.embedding
+  if (!response.ok || !Array.isArray(embedding)) throw new Error(`Embedding API error: ${response.status}`)
+  if (embedding.length !== dimensions) throw new Error(`Embedding dimension mismatch: expected ${dimensions}, got ${embedding.length}`)
+  return embedding
 }
 
 export async function createKnowledgeDatabase() {
@@ -65,7 +69,8 @@ export async function createKnowledgeDatabase() {
     },
     async health() {
       const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM knowledge_documents WHERE status = $1', ['published'])
-      return { connected: true, documents: rows[0].count, vectorEnabled: Boolean(process.env.EMBEDDING_API_URL) }
+      const vectorResult = await pool.query('SELECT COUNT(embedding)::int AS count FROM knowledge_chunks')
+      return { connected: true, documents: rows[0].count, vectorEnabled: vectorResult.rows[0].count > 0, vectorizedChunks: vectorResult.rows[0].count }
     }
   }
 }

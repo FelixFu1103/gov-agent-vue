@@ -31,9 +31,14 @@ function vectorLiteral(values) {
 
 const pool = new Pool({ connectionString: databaseUrl, max: 3 })
 const documents = await loadKnowledge(resolve('knowledge/documents'))
+const embeddingDimensions = Number(process.env.EMBEDDING_DIMENSIONS || 1024)
 let chunkCount = 0
 
 try {
+  if (!Number.isInteger(embeddingDimensions) || embeddingDimensions < 1 || embeddingDimensions > 16_000) throw new Error('EMBEDDING_DIMENSIONS 不合法')
+  await pool.query('DROP INDEX IF EXISTS knowledge_chunks_embedding_idx')
+  await pool.query(`ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector(${embeddingDimensions})`)
+  await pool.query('CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)')
   for (const document of documents) {
     const client = await pool.connect()
     try {

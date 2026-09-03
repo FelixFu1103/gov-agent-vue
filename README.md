@@ -61,6 +61,7 @@ npm start
 
 ```bash
 npm run db:start
+npm run db:model
 npm run db:ingest
 npm run dev
 ```
@@ -72,19 +73,23 @@ npm run dev
   "database": {
     "connected": true,
     "documents": 32,
-    "vectorEnabled": false
+    "vectorEnabled": true,
+    "vectorizedChunks": 32
   }
 }
 ```
 
-默认只启用 PostgreSQL 中文相似度检索。启用向量检索时，在 `.env` 配置一个 OpenAI 兼容的 Embedding 服务：
+默认通过 Docker 中的 Ollama 和 `bge-m3` 在本机生成1024维向量，知识正文不会发送给第三方。首次使用需要运行 `npm run db:model` 下载模型，然后运行 `npm run db:ingest`。
+
+如需改用云端 OpenAI 兼容的 Embedding 服务，可在 `.env` 修改：
 
 ```dotenv
 EMBEDDING_API_URL=https://your-provider.example/v1/embeddings
 EMBEDDING_API_KEY=your_key
 EMBEDDING_MODEL=your_1536_dimension_model
+EMBEDDING_DIMENSIONS=1536
 ```
 
-然后再次执行 `npm run db:ingest` 生成并写入向量。Embedding 模型必须输出 1536 维；DeepSeek Chat Key 只用于生成回答，不能直接替代 Embedding 服务。
+然后再次执行 `npm run db:ingest` 生成并写入向量。`EMBEDDING_DIMENSIONS` 必须与模型实际输出一致；DeepSeek Chat Key 只用于生成回答，不能直接替代 Embedding 服务。
 
 数据库不可用或没有导入数据时，Agent 会继续使用 `knowledge/documents/`，并在服务端日志和健康检查中标明降级状态。
