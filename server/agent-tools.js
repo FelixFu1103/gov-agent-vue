@@ -1,4 +1,4 @@
-import { buildRetrievalQuery, searchKnowledge } from './knowledge.js'
+import { buildRetrievalQuery, searchKnowledgeChunks } from './knowledge.js'
 
 const intentDefinitions = {
   medical_employee_enrollment: {
@@ -191,17 +191,7 @@ export async function search_policy({ documents, query, limit = 3, intent, slots
     const results = await databaseSearch(query, { limit: candidateLimit, intent: !intent || intent === 'unknown' ? null : intent, region: slots.insured_city || null })
     if (results.length) return finish(results)
   }
-  const candidates = searchKnowledge(documents, query, candidateLimit).map(document => ({
-    documentId: document.filename,
-    title: document.title,
-    department: document.department,
-    region: document.region,
-    verifiedAt: document.verified_at,
-    versionNote: document.version_note,
-    source: document.source,
-    sourceDocument: document.source_document,
-    body: document.body
-  }))
+  const candidates = searchKnowledgeChunks(documents, query, candidateLimit)
   return finish(candidates)
 }
 

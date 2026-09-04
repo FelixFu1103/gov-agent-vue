@@ -11,6 +11,7 @@ const groups = {
   },
   medical_resident_enrollment: {
     document: '31-resident-medical-enrollment.md',
+    alternativeDocuments: ['official-nj-resident-insurance-rules.md', 'official-js-service-guide-2022.md'],
     questions: [
       '没有工作怎么参加居民医保', '城乡居民医保如何登记', '学生参加居民医保需要什么', '南京居民医保参保材料',
       '农村居民怎么登记基本医保', '不参加职工医保能办居民医保吗', '居民医保可以在社区办理吗', '城乡居民医保网上怎么办',
@@ -21,6 +22,7 @@ const groups = {
   },
   cross_region_medical_filing: {
     document: '10-cross-region-medical.md',
+    alternativeDocuments: ['official-js-cross-region-rules-2022.md', 'official-js-service-guide-2022.md'],
     questions: [
       '去外省住院怎么备案', '跨省看病需要提前办什么', '异地就医备案需要哪些材料', '南京医保去上海住院怎么办',
       '外地长期居住人员如何办医保备案', '单位派到异地工作怎么备案就医', '异地安置退休人员备案材料', '医院转诊去省外需要什么手续',
@@ -98,5 +100,5 @@ const groups = {
 }
 
 export const retrievalCases = Object.entries(groups).flatMap(([expectedIntent, group]) =>
-  group.questions.map((question, index) => ({ id: `${expectedIntent}-${index + 1}`, question, expectedIntent, expectedDocument: group.document }))
+  group.questions.map((question, index) => ({ id: `${expectedIntent}-${index + 1}`, question, expectedIntent, expectedDocument: group.document, acceptableDocuments: [group.document, ...(group.alternativeDocuments || [])] }))
 )

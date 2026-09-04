@@ -81,7 +81,7 @@ function handleKeydown(event) {
           <div ref="messageBox" class="messages" aria-live="polite">
             <div v-for="message in messages" :key="message.id" class="row" :class="{ user: message.role === 'user' }">
               <div class="avatar">{{ message.role === 'user' ? '我' : '医' }}</div>
-              <div class="bubble"><p>{{ message.text }}</p><div v-if="message.sources?.length" class="source"><span v-for="(item, index) in message.sources" :key="item.url">{{ index ? '；' : '官方依据：' }}<a :href="item.url" target="_blank" rel="noopener noreferrer">{{ item.title }}（网页原文）</a><template v-if="item.documentUrl"> · <a :href="item.documentUrl" target="_blank" rel="noopener noreferrer">PDF原文</a></template></span></div><div v-else-if="message.source" class="source">{{ message.source }}</div></div>
+              <div class="bubble"><p>{{ message.text }}</p><div v-if="message.sources?.length" class="source"><span v-for="(item, index) in message.sources" :key="item.chunkId || `${item.url}-${index}`">{{ index ? '；' : '官方依据：' }}[资料{{ index + 1 }}] <a :href="item.url" target="_blank" rel="noopener noreferrer">{{ item.title }} · {{ item.sectionTitle }}（网页原文）</a><template v-if="item.documentUrl"> · <a :href="item.documentUrl" target="_blank" rel="noopener noreferrer">PDF原文</a></template></span></div><div v-else-if="message.source" class="source">{{ message.source }}</div></div>
             </div>
             <div v-if="loading" class="row"><div class="avatar">医</div><div class="bubble typing">正在检索江苏医保资料并整理回答…</div></div>
           </div>

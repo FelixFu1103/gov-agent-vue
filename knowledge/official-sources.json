@@ -1,0 +1,61 @@
+[
+  {
+    "id": "js-faq",
+    "type": "jiangsu-faq-list",
+    "url": "https://ybj.jiangsu.gov.cn/col/col73932/index.html",
+    "department": "江苏省医疗保障局",
+    "region": "江苏省",
+    "policy_level": "省级",
+    "content_kind": "官方问答"
+  },
+  {
+    "id": "js-maternity-subsidy-faq",
+    "type": "html",
+    "url": "https://ybj.jiangsu.gov.cn/art/2025/4/25/art_73937_11601057.html",
+    "service_code": "maternity_medical_payment",
+    "department": "江苏省医疗保障局",
+    "region": "江苏省",
+    "policy_level": "省级",
+    "content_kind": "政策解读"
+  },
+  {
+    "id": "js-maternity-subsidy-policy",
+    "type": "html",
+    "url": "https://ybj.jiangsu.gov.cn/art/2025/4/25/art_74036_11600990.html",
+    "service_code": "maternity_medical_payment",
+    "department": "江苏省医疗保障局",
+    "region": "江苏省",
+    "policy_level": "省级",
+    "content_kind": "政策文件"
+  },
+  {
+    "id": "nj-resident-insurance-rules",
+    "type": "html",
+    "url": "https://ybj.nanjing.gov.cn/gkml/201903/t20190325_1475862.html",
+    "service_code": "medical_resident_enrollment",
+    "department": "南京市医疗保障局",
+    "region": "江苏省南京市",
+    "policy_level": "市级",
+    "content_kind": "政策文件"
+  },
+  {
+    "id": "nj-outpatient-special-policy",
+    "type": "html",
+    "url": "https://ybj.nanjing.gov.cn/gkml/202301/t20230109_3797130.html",
+    "service_code": "outpatient_chronic_special_disease",
+    "department": "南京市医疗保障局",
+    "region": "江苏省南京市",
+    "policy_level": "市级",
+    "content_kind": "政策文件"
+  },
+  {
+    "id": "nj-employee-outpatient-mutual",
+    "type": "html",
+    "url": "https://ybj.nanjing.gov.cn/gkml/202212/t20221231_3792597.html",
+    "service_code": "medical_family_mutual_aid",
+    "department": "南京市医疗保障局",
+    "region": "江苏省南京市",
+    "policy_level": "市级",
+    "content_kind": "政策文件"
+  }
+]

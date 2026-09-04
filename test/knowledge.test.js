@@ -15,7 +15,7 @@ const cases = [
 ]
 
 test('knowledge base contains the complete medical insurance slice', () => {
-  assert.equal(documents.length, 15)
+  assert.ok(documents.length >= 45)
   for (const [, expected] of cases) assert.ok(documents.some(document => document.filename === expected))
 })
 

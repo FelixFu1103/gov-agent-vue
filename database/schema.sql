@@ -10,15 +10,19 @@ CREATE TABLE IF NOT EXISTS knowledge_documents (
   region TEXT,
   topic TEXT,
   keywords TEXT,
+  policy_level TEXT,
+  content_kind TEXT,
   source_url TEXT NOT NULL,
   source_notice_url TEXT,
   source_document_url TEXT,
   verified_at DATE,
+  publication_date DATE,
   effective_from DATE,
   effective_to DATE,
   version_note TEXT,
   priority TEXT,
   content_hash TEXT NOT NULL,
+  ingest_version TEXT,
   status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'published', 'archived')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -28,6 +32,9 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   id BIGSERIAL PRIMARY KEY,
   document_id BIGINT NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
+  section_title TEXT NOT NULL DEFAULT '正文',
+  section_type TEXT NOT NULL DEFAULT 'general',
+  audience TEXT,
   content TEXT NOT NULL,
   search_text TEXT NOT NULL,
   embedding vector(1024),
@@ -41,4 +48,5 @@ CREATE INDEX IF NOT EXISTS knowledge_documents_topic_idx ON knowledge_documents(
 CREATE INDEX IF NOT EXISTS knowledge_documents_service_code_idx ON knowledge_documents(service_code);
 CREATE INDEX IF NOT EXISTS knowledge_documents_effective_idx ON knowledge_documents(effective_from, effective_to);
 CREATE INDEX IF NOT EXISTS knowledge_chunks_search_trgm_idx ON knowledge_chunks USING gin(search_text gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS knowledge_chunks_section_type_idx ON knowledge_chunks(section_type);
 CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx ON knowledge_chunks USING hnsw (embedding vector_cosine_ops);

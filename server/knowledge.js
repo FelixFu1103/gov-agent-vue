@@ -1,5 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { inferAudience, inferQuerySectionType, splitIntoKnowledgeChunks } from './chunking.js'
 
 const aliasGroups = [
   ['职工参保', '职工医保', '员工医保', '单位医保', '单位参保'],
@@ -57,13 +58,55 @@ export function searchKnowledge(documents, query, limit = 4) {
         else if (text.includes(term)) score += 1
       }
       if (intent && `${document.topic || ''}${document.title || ''}`.includes(intent)) score += 30
-      if (document.priority === 'high' && score > 0) score += 3
+      if (document.priority === 'high' && score > 0) score += 30
       return { document, score }
     })
     .filter(result => result.score >= 2)
     .sort((a, b) => b.score - a.score || a.document.filename.localeCompare(b.document.filename))
     .slice(0, limit)
     .map(result => result.document)
+}
+
+export function searchKnowledgeChunks(documents, query, limit = 4) {
+  const terms = queryTerms(query)
+  const intent = inferIntent(query)
+  const requestedSectionType = inferQuerySectionType(query)
+  return documents
+    .flatMap(document => splitIntoKnowledgeChunks(document.body).map((chunk, chunkIndex) => {
+      const heading = `${document.title || ''}${document.topic || ''}${document.keywords || ''}${chunk.sectionTitle}`.toLowerCase()
+      const text = `${heading}${chunk.content}`.toLowerCase()
+      let score = 0
+      for (const term of terms) {
+        if (heading.includes(term)) score += 5
+        else if (text.includes(term)) score += 1
+      }
+      if (intent && `${document.topic || ''}${document.title || ''}`.includes(intent)) score += 30
+      if (requestedSectionType && chunk.sectionType === requestedSectionType) score += 12
+      if (document.priority === 'high' && score > 0) score += 15
+      return {
+        documentId: document.filename,
+        chunkId: `${document.filename}:${chunkIndex}`,
+        chunkIndex,
+        sectionTitle: chunk.sectionTitle,
+        sectionType: chunk.sectionType,
+        audience: document.audience || inferAudience(`${document.title} ${chunk.content}`),
+        title: document.title,
+        department: document.department,
+        region: document.region,
+        verifiedAt: document.verified_at,
+        effectiveFrom: document.effective_from || null,
+        effectiveTo: document.effective_to || null,
+        versionNote: document.version_note,
+        source: document.source,
+        sourceDocument: document.source_document,
+        body: chunk.content,
+        score,
+        channels: ['markdown']
+      }
+    }))
+    .filter(result => result.score >= 2)
+    .sort((a, b) => b.score - a.score || a.chunkId.localeCompare(b.chunkId))
+    .slice(0, limit)
 }
 
 export function buildRetrievalQuery(history, message) {

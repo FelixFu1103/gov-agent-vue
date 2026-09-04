@@ -120,16 +120,16 @@ async function handleChat(request, response) {
     databaseSearch: knowledgeDatabase?.search,
     rerank: knowledgeReranker.enabled ? knowledgeReranker.rerank : null
   })
-  const matches = agent.policies.slice(0, 1)
+  const matches = agent.policies.slice(0, 3)
   const context = matches.length
-    ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n部门：${document.department}\n地区：${document.region}\n核验日期：${document.verifiedAt}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
+    ? matches.map((document, index) => `[资料${index + 1}]\n标题：${document.title}\n章节：${document.sectionTitle || '正文'}\n片段编号：${document.chunkId || `${document.documentId}:${document.chunkIndex}`}\n章节类型：${document.sectionType || 'general'}\n资料类型：${document.contentKind || '办事指南'}\n政策层级：${document.policyLevel || '未标注'}\n适用人群：${document.audience || '医保参保人'}\n部门：${document.department}\n地区：${document.region}\n发布日期：${document.publicationDate || '未标注'}\n有效期：${document.effectiveFrom || '未标注'} 至 ${document.effectiveTo || '未标注'}\n核验日期：${document.verifiedAt}\n官方来源：${document.source}\n内容：${document.body}`).join('\n\n')
     : '未检索到相关的本地知识库资料。'
   const payload = {
     model,
     messages: [
       { role: 'system', content: instructions },
       ...history,
-      { role: 'user', content: `Agent当前状态：\n意图：${agent.state.intent}\n已确认信息：${JSON.stringify(agent.state.slots)}\n仍缺信息：${agent.slotCheck.missing.join('、') || '无'}\n下一追问：${agent.slotCheck.nextQuestion || '无'}\n证据判断：${agent.evidence.reason}\n建议材料清单：${agent.checklist.items.join('；') || '暂无'}\n\n本次检索资料：\n${context}\n\n用户最新问题：${message}\n\n请依据资料回答；如果仍缺信息，在提供现有通用结论后，只追问“下一追问”中的一个问题。` }
+      { role: 'user', content: `Agent当前状态：\n意图：${agent.state.intent}\n已确认信息：${JSON.stringify(agent.state.slots)}\n仍缺信息：${agent.slotCheck.missing.join('、') || '无'}\n下一追问：${agent.slotCheck.nextQuestion || '无'}\n证据判断：${agent.evidence.reason}\n建议材料清单：${agent.checklist.items.join('；') || '暂无'}\n\n本次检索资料：\n${context}\n\n用户最新问题：${message}\n\n请依据资料回答；关键政策结论后用[资料1]这样的编号标明证据。不得引用未提供的资料编号。如果仍缺信息，在提供现有通用结论后，只追问“下一追问”中的一个问题。` }
     ],
     stream: false,
     max_tokens: 4096
@@ -170,11 +170,34 @@ async function handleChat(request, response) {
         slots: agent.state.slots,
         missingSlots: agent.slotCheck.missing,
         evidence: agent.evidence,
-        citationVerification: { passed: verification.passed, removedClaims: verification.unsupportedClaims },
+        citationVerification: { passed: verification.passed, removedClaims: verification.unsupportedClaims, invalidReferences: verification.invalidReferences, citedReferences: verification.citedReferences },
         reranker: { enabled: knowledgeReranker.enabled, model: knowledgeReranker.model, applied: matches.some(document => Number.isFinite(document.rerankScore)) },
         tools: agent.trace
       },
-      sources: matches.map(document => ({ title: document.title, department: document.department, url: document.source, documentUrl: document.sourceDocument }))
+      sources: matches.map(document => ({
+        title: document.title,
+        department: document.department,
+        url: document.source,
+        documentUrl: document.sourceDocument,
+        chunkId: document.chunkId || `${document.documentId}:${document.chunkIndex}`,
+        chunkIndex: document.chunkIndex,
+        sectionTitle: document.sectionTitle || '正文',
+        sectionType: document.sectionType || 'general',
+        audience: document.audience || null,
+        region: document.region,
+        policyLevel: document.policyLevel || null,
+        contentKind: document.contentKind || null,
+        publicationDate: document.publicationDate || null,
+        effectiveFrom: document.effectiveFrom || null,
+        effectiveTo: document.effectiveTo || null,
+        retrieval: {
+          score: document.score,
+          channels: document.channels || [],
+          keywordRank: document.keywordRank,
+          vectorRank: document.vectorRank,
+          rerankScore: document.rerankScore
+        }
+      }))
     })
   } catch (error) {
     console.error('Chat request failed:', error?.name)
