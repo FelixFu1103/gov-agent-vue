@@ -172,6 +172,7 @@ async function handleChat(request, response) {
         evidence: agent.evidence,
         citationVerification: { passed: verification.passed, removedClaims: verification.unsupportedClaims, invalidReferences: verification.invalidReferences, citedReferences: verification.citedReferences },
         reranker: { enabled: knowledgeReranker.enabled, model: knowledgeReranker.model, applied: matches.some(document => Number.isFinite(document.rerankScore)) },
+        retrievalTrace: agent.retrievalTrace,
         tools: agent.trace
       },
       sources: matches.map(document => ({
@@ -193,9 +194,12 @@ async function handleChat(request, response) {
         retrieval: {
           score: document.score,
           channels: document.channels || [],
+          keywordScore: document.keywordScore,
+          vectorScore: document.vectorScore,
           keywordRank: document.keywordRank,
           vectorRank: document.vectorRank,
-          rerankScore: document.rerankScore
+          rerankScore: document.rerankScore,
+          rerankFinalScore: document.rerankFinalScore
         }
       }))
     })

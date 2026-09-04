@@ -178,13 +178,22 @@ export function getSessionState(conversationId) {
 export async function search_policy({ documents, query, limit = 3, intent, slots = {}, databaseSearch, rerank }) {
   const candidateLimit = Math.max(10, limit * 4)
   const finish = async candidates => {
-    if (!rerank || candidates.length < 2) return candidates.slice(0, limit)
+    const retrievalTrace = candidates._retrievalTrace || null
+    const attachTrace = (results, rerankerTrace) => {
+      Object.defineProperty(results, '_retrievalTrace', {
+        enumerable: false,
+        value: retrievalTrace ? { ...retrievalTrace, reranker: rerankerTrace, final: results.map((item, index) => ({ rank: index + 1, chunkId: item.chunkId, documentId: item.documentId, title: item.title, sectionTitle: item.sectionTitle, rrfScore: item.score, rerankScore: item.rerankScore, rerankFinalScore: item.rerankFinalScore })) } : null
+      })
+      return results
+    }
+    if (!rerank || candidates.length < 2) return attachTrace(candidates.slice(0, limit), { enabled: Boolean(rerank), applied: false, durationMs: 0 })
+    const rerankStartedAt = performance.now()
     try {
-      const reranked = await rerank(query, candidates, { topN: limit })
-      return reranked.length ? reranked : candidates.slice(0, limit)
+      const reranked = await rerank(query, candidates, { topN: limit, intent })
+      return attachTrace(reranked.length ? reranked : candidates.slice(0, limit), { enabled: true, applied: reranked.length > 0, durationMs: Math.round(performance.now() - rerankStartedAt), candidateCount: candidates.length })
     } catch (error) {
       console.warn('Reranker unavailable, using RRF order:', error.message)
-      return candidates.slice(0, limit)
+      return attachTrace(candidates.slice(0, limit), { enabled: true, applied: false, durationMs: Math.round(performance.now() - rerankStartedAt), candidateCount: candidates.length, fallback: 'rrf' })
     }
   }
   if (databaseSearch) {
@@ -257,6 +266,7 @@ export async function runAgentTools({ conversationId, message, history, document
     state,
     slotCheck,
     policies,
+    retrievalTrace: policies._retrievalTrace || null,
     guide,
     evidence,
     checklist,

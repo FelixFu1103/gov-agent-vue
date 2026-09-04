@@ -28,6 +28,35 @@ services:
       timeout: 5s
       retries: 12
 
+  reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-arm64-latest@sha256:35c50d7494de22deecdb783b8f5b7e1d05765709bd90071b03469b9440d28656
+    platform: linux/arm64
+    command:
+      - --model-id
+      - BAAI/bge-reranker-v2-m3
+      - --max-client-batch-size
+      - "16"
+      - --max-batch-requests
+      - "2"
+      - --max-batch-tokens
+      - "2048"
+      - --max-concurrent-requests
+      - "16"
+      - --tokenization-workers
+      - "2"
+      - --auto-truncate
+    ports:
+      - "8081:80"
+    volumes:
+      - gov_agent_reranker:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 180s
+
 volumes:
   gov_agent_pgdata:
   gov_agent_ollama:
+  gov_agent_reranker:

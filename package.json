@@ -10,6 +10,9 @@
     "build": "vite build",
     "test": "node --test",
     "db:start": "docker compose up -d postgres ollama",
+    "rerank:start": "docker compose up -d reranker",
+    "rerank:logs": "docker compose logs -f reranker",
+    "rerank:stop": "docker compose stop reranker",
     "db:model": "docker compose exec ollama ollama pull bge-m3",
     "knowledge:sync": "node scripts/sync-official-knowledge.mjs",
     "knowledge:pdf": "python3 scripts/extract-official-pdfs.py",
@@ -17,6 +20,7 @@
     "db:stop": "docker compose down",
     "db:ingest": "node --env-file-if-exists=.env scripts/ingest-knowledge.mjs",
     "eval:retrieval": "node --env-file-if-exists=.env scripts/evaluate-retrieval.mjs",
+    "eval:rag": "node --env-file-if-exists=.env scripts/evaluate-rag-comparison.mjs",
     "preview": "vite preview",
     "start": "node --env-file-if-exists=.env server/index.js"
   },

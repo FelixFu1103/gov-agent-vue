@@ -66,18 +66,28 @@
 
 ## Reranker精排
 
-RRF负责融合关键词和向量排名，Reranker进一步读取“问题＋候选片段”并重新判断相关性。项目兼容返回 `results[{ index, relevance_score }]` 的 Jina/Cohere 风格 `/rerank` API：
+RRF负责融合关键词和向量排名，Reranker进一步读取“问题＋候选片段”并重新判断相关性。项目同时兼容 Hugging Face TEI 和返回 `results[{ index, relevance_score }]` 的 Jina/Cohere 风格 `/rerank` API。本地默认使用 TEI：
 
 ```dotenv
-RERANK_API_URL=https://your-provider.example/v1/rerank
-RERANK_API_KEY=your_rerank_api_key_here
+RERANK_API_URL=http://127.0.0.1:8081/rerank
+RERANK_API_FORMAT=tei
 RERANK_MODEL=BAAI/bge-reranker-v2-m3
-RERANK_TIMEOUT_MS=15000
+RERANK_TIMEOUT_MS=30000
 ```
 
 配置后，数据库先通过混合检索取得至少10个候选，再交给Reranker精排并保留最终3条。未配置、超时或接口异常时自动回退到RRF顺序，问答不会因此中断。`GET /api/health` 会显示Reranker是否启用；`POST /api/chat` 的 `agent.reranker` 会显示本轮是否实际完成精排。
 
-当前提交只增加Reranker能力和接口适配，不会自动下载额外的大模型。若使用本地 `bge-reranker-v2-m3`，需要另行部署提供 `/rerank` HTTP接口的推理服务；Ollama现有的 `/api/embed` 只用于Embedding，不能直接替代Cross-Encoder精排接口。
+本地 `bge-reranker-v2-m3` 由 Docker Compose 中的 Hugging Face Text Embeddings Inference 服务提供。Ollama现有的 `/api/embed` 只用于Embedding，不能直接替代Cross-Encoder精排接口。
+
+首次启动会下载约2.3GB模型，在Apple Silicon Docker中使用CPU推理：
+
+```bash
+npm run rerank:start
+docker compose ps reranker
+curl http://127.0.0.1:8081/health
+```
+
+查看首次下载和加载进度可执行 `npm run rerank:logs`，停止服务使用 `npm run rerank:stop`。
 
 ## 本地运行
 
@@ -123,10 +133,19 @@ npm run db:ingest
 ```bash
 npm test
 npm run eval:retrieval
+npm run eval:rag
 npm run build
 ```
 
 文档级固定评测集位于 `evaluation/retrieval-cases.js`，覆盖15项医保业务、165种问法；片段级评测集位于 `evaluation/chunk-retrieval-cases.js`，覆盖每类意图的材料、渠道、条件、待遇或时限章节。评测输出意图准确率、文档Top-1/Top-3以及片段Top-1/Top-3。这不等于真实生产准确率；仍需持续加入真实用户问法、错别字、越界问题、多轮对话和对抗样本。
+
+`eval:rag`使用同一次数据库召回对照关键词、向量、RRF和RRF+Rerank四种策略，输出Top-1、Recall@3、MRR@10、平均耗时和失败用例，报告写入`evaluation/results/rag-comparison-latest.json`。完整评测默认运行165条；本机CPU Rerank较慢，可先运行分层抽样：
+
+```bash
+RAG_EVAL_LIMIT=15 npm run eval:rag
+```
+
+问答页面右侧的“RAG检索过程”面板会显示当前意图、槽位、各阶段耗时、关键词/向量候选、RRF排名以及Rerank前后分数。该面板使用服务端返回的检索轨迹，不会再次调用模型。
 
 ## 生产化待办
 

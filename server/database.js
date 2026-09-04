@@ -53,15 +53,18 @@ export async function createKnowledgeDatabase() {
   return {
     pool,
     async search(query, options = {}) {
-      const { limit = 3, intent = null, region = null } = typeof options === 'number' ? { limit: options } : options
+      const { limit = 3, intent = null, region = null, strategy = 'rrf' } = typeof options === 'number' ? { limit: options } : options
+      const startedAt = performance.now()
       const candidateLimit = 20
       const requestedSectionType = inferQuerySectionType(query)
       let embedding = null
+      const embeddingStartedAt = performance.now()
       try {
         embedding = await createEmbedding(query)
       } catch (error) {
         console.warn('Embedding request failed, using text search:', error.message)
       }
+      const embeddingMs = performance.now() - embeddingStartedAt
       const commonSql = `
         FROM knowledge_chunks kc
         JOIN knowledge_documents kd ON kd.id = kc.document_id
@@ -72,6 +75,7 @@ export async function createKnowledgeDatabase() {
           AND ($3::text IS NULL OR kd.service_code = $3 OR kd.service_code IS NULL)
           AND ($4::text IS NULL OR kd.region = '江苏省' OR kd.region ILIKE '%' || $4 || '%')`
       const params = [query, candidateLimit, intent, region, requestedSectionType]
+      const keywordStartedAt = performance.now()
       const keywordResult = await pool.query(`
         SELECT kc.id::text AS "chunkId", kc.chunk_index AS "chunkIndex",
           kc.section_title AS "sectionTitle", kc.section_type AS "sectionType", kc.audience,
@@ -88,9 +92,12 @@ export async function createKnowledgeDatabase() {
         ${commonSql}
         ORDER BY "rawScore" DESC
         LIMIT $2`, params)
+      const keywordMs = performance.now() - keywordStartedAt
 
       let vectorRows = []
+      let vectorMs = 0
       if (embedding) {
+        const vectorStartedAt = performance.now()
         const vectorResult = await pool.query(`
           SELECT kc.id::text AS "chunkId", kc.chunk_index AS "chunkIndex",
             kc.section_title AS "sectionTitle", kc.section_type AS "sectionType", kc.audience,
@@ -108,16 +115,63 @@ export async function createKnowledgeDatabase() {
           ORDER BY "rawScore" DESC
           LIMIT $2`, [...params, vectorLiteral(embedding)])
         vectorRows = vectorResult.rows
+        vectorMs = performance.now() - vectorStartedAt
       }
 
       const fused = fuseRankedChunks(keywordResult.rows, vectorRows)
       const minimumKeywordScore = Number(process.env.RETRIEVAL_MIN_KEYWORD_SCORE || 0.05)
       const minimumVectorScore = Number(process.env.RETRIEVAL_MIN_VECTOR_SCORE || 0.42)
-      return fused
+      const clean = row => {
+        const { rawScore, ...cleaned } = row
+        return cleaned
+      }
+      const keyword = keywordResult.rows
+        .filter(row => Number(row.rawScore) >= minimumKeywordScore)
+        .map((row, index) => clean({ ...row, score: Number(row.rawScore), channels: ['keyword'], keywordScore: Number(row.rawScore), vectorScore: 0, keywordRank: index + 1, vectorRank: null }))
+      const vector = vectorRows
+        .filter(row => Number(row.rawScore) >= minimumVectorScore)
+        .map((row, index) => clean({ ...row, score: Number(row.rawScore), channels: ['vector'], keywordScore: 0, vectorScore: Number(row.rawScore), keywordRank: null, vectorRank: index + 1 }))
+      const rrf = fused
         .filter(row => row.keywordScore >= minimumKeywordScore || row.vectorScore >= minimumVectorScore)
         .sort((a, b) => b.score - a.score)
-        .slice(0, limit)
-        .map(({ rawScore, ...row }) => row)
+        .map(clean)
+      const rankings = { keyword, vector, rrf }
+      const selected = (rankings[strategy] || rrf).slice(0, limit)
+      const summarize = rows => rows.slice(0, 10).map((row, index) => ({
+        rank: index + 1,
+        chunkId: row.chunkId,
+        documentId: row.documentId,
+        title: row.title,
+        sectionTitle: row.sectionTitle,
+        sectionType: row.sectionType,
+        channels: row.channels,
+        score: row.score,
+        keywordScore: row.keywordScore,
+        vectorScore: row.vectorScore,
+        keywordRank: row.keywordRank,
+        vectorRank: row.vectorRank
+      }))
+      Object.defineProperty(selected, '_retrievalTrace', {
+        enumerable: false,
+        value: {
+          query,
+          strategy,
+          requestedSectionType,
+          embeddingAvailable: Boolean(embedding),
+          candidateLimit,
+          thresholds: { keyword: minimumKeywordScore, vector: minimumVectorScore },
+          timings: {
+            embeddingMs: Math.round(embeddingMs),
+            keywordMs: Math.round(keywordMs),
+            vectorMs: Math.round(vectorMs),
+            retrievalMs: Math.round(performance.now() - startedAt)
+          },
+          keyword: summarize(keyword),
+          vector: summarize(vector),
+          rrf: summarize(rrf)
+        }
+      })
+      return selected
     },
     async health() {
       const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM knowledge_documents WHERE status = $1', ['published'])
