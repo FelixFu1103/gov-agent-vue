@@ -25,6 +25,9 @@
     "start": "node --env-file-if-exists=.env server/index.js"
   },
   "dependencies": {
+    "busboy": "^1.6.0",
+    "mammoth": "^1.12.2",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.23.0",
     "vue": "^3.5.0"
   },

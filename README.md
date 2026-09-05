@@ -39,7 +39,9 @@
 7. `assess_evidence`：检查资料是否存在、是否过期、信息是否完整。
 8. `generate_material_checklist`：按照事项和人员类别生成材料清单。
 
-`POST /api/chat` 会返回 `agent` 调试字段，包括意图、置信度、槽位、缺失信息、证据判断、引用检查和工具轨迹。当前属于确定性工作流型 Agent，不是让大模型自由调用任意工具的开放式 Agent。
+`POST /api/chat` 使用 SSE 流式返回：`delta` 事件携带回答增量，`done` 事件携带最终校验答案、来源和 `agent` 调试字段，`error` 事件携带错误信息。当前属于确定性工作流型 Agent，不是让大模型自由调用任意工具的开放式 Agent。
+
+页面右侧可上传 PDF、DOCX、TXT、Markdown、HTML 文件，或填写 HTTPS 的政府官网网页链接。`POST /api/knowledge/upload` 会提取正文、分块、调用当前 Embedding 服务并写入 PostgreSQL/pgvector，完成后新资料立即参与检索。单个文件上限 10MB；旧版 `.doc` 请先转换为 `.docx`。
 
 ## 混合 RAG
 

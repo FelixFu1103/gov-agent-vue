@@ -1,5 +1,7 @@
 import pg from 'pg'
+import { createHash } from 'node:crypto'
 import { inferQuerySectionType } from './chunking.js'
+import { inferAudience, splitIntoKnowledgeChunks } from './chunking.js'
 
 const { Pool } = pg
 
@@ -52,6 +54,47 @@ export async function createKnowledgeDatabase() {
 
   return {
     pool,
+    async ingest(document) {
+      const client = await pool.connect()
+      const contentHash = createHash('sha256').update(document.body).digest('hex')
+      const externalId = `upload-${contentHash.slice(0, 24)}`
+      const chunkSize = Number(process.env.KNOWLEDGE_CHUNK_SIZE || 180)
+      const chunkOverlap = Number(process.env.KNOWLEDGE_CHUNK_OVERLAP || 30)
+      const chunks = splitIntoKnowledgeChunks(document.body, chunkSize, chunkOverlap)
+      try {
+        await client.query('BEGIN')
+        const { rows } = await client.query(`
+          INSERT INTO knowledge_documents
+            (external_id, title, department, region, topic, keywords, policy_level, content_kind, source_url, verified_at, priority, content_hash, ingest_version, status, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,'省级','上传资料',$7,CURRENT_DATE,'normal',$8,'web-upload-v1','published',NOW())
+          ON CONFLICT (external_id) DO UPDATE SET title=EXCLUDED.title, department=EXCLUDED.department,
+            region=EXCLUDED.region, topic=EXCLUDED.topic, keywords=EXCLUDED.keywords, source_url=EXCLUDED.source_url,
+            verified_at=CURRENT_DATE, status='published', updated_at=NOW()
+          RETURNING id
+        `, [externalId, document.title, document.department, document.region, document.topic, document.keywords, document.source, contentHash])
+        const documentId = rows[0].id
+        await client.query('DELETE FROM knowledge_chunks WHERE document_id = $1', [documentId])
+        let vectorizedChunks = 0
+        for (const [index, chunk] of chunks.entries()) {
+          const audience = inferAudience(`${document.title} ${chunk.content}`)
+          const searchText = `${document.title} ${document.topic} ${document.keywords} ${chunk.sectionTitle} ${audience} ${chunk.content}`
+          const embedding = await createEmbedding(searchText)
+          if (!embedding) throw new Error('Embedding 服务尚未配置，无法完成向量化')
+          vectorizedChunks += 1
+          await client.query(`
+            INSERT INTO knowledge_chunks (document_id, chunk_index, section_title, section_type, audience, content, search_text, embedding, token_estimate)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9)
+          `, [documentId, index, chunk.sectionTitle, chunk.sectionType, audience, chunk.content, searchText, embedding ? vectorLiteral(embedding) : null, Math.ceil(chunk.content.length / 2)])
+        }
+        await client.query('COMMIT')
+        return { documentId: externalId, title: document.title, characters: document.body.length, chunks: chunks.length, vectorizedChunks }
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    },
     async search(query, options = {}) {
       const { limit = 3, intent = null, region = null, strategy = 'rrf' } = typeof options === 'number' ? { limit: options } : options
       const startedAt = performance.now()

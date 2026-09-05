@@ -6,6 +6,8 @@ import { agentToolDefinitions, runAgentTools } from './agent-tools.js'
 import { createKnowledgeDatabase } from './database.js'
 import { verifyGeneratedAnswer } from './citation-verifier.js'
 import { createKnowledgeReranker } from './reranker.js'
+import { readDeepSeekStream, sendSse } from './sse.js'
+import { parseKnowledgeUpload } from './knowledge-upload.js'
 
 const port = Number(process.env.PORT || 8787)
 const distRoot = resolve('dist')
@@ -73,7 +75,7 @@ async function readJson(request) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
 }
 
-async function requestDeepSeek(payload) {
+async function requestDeepSeek(payload, signal) {
   const apiResponse = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: {
@@ -81,10 +83,9 @@ async function requestDeepSeek(payload) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(45_000)
+    signal: signal || AbortSignal.timeout(45_000)
   })
-  const result = await apiResponse.json()
-  return { apiResponse, result }
+  return apiResponse
 }
 
 async function handleChat(request, response) {
@@ -131,38 +132,40 @@ async function handleChat(request, response) {
       ...history,
       { role: 'user', content: `Agent当前状态：\n意图：${agent.state.intent}\n已确认信息：${JSON.stringify(agent.state.slots)}\n仍缺信息：${agent.slotCheck.missing.join('、') || '无'}\n下一追问：${agent.slotCheck.nextQuestion || '无'}\n证据判断：${agent.evidence.reason}\n建议材料清单：${agent.checklist.items.join('；') || '暂无'}\n\n本次检索资料：\n${context}\n\n用户最新问题：${message}\n\n请依据资料回答；关键政策结论后用[资料1]这样的编号标明证据。不得引用未提供的资料编号。如果仍缺信息，在提供现有通用结论后，只追问“下一追问”中的一个问题。` }
     ],
-    stream: false,
+    stream: true,
     max_tokens: 4096
   }
 
+  let timeout
   try {
-    let { apiResponse, result } = await requestDeepSeek(payload)
+    const controller = new AbortController()
+    timeout = setTimeout(() => controller.abort(), 45_000)
+    response.once('close', () => {
+      if (!response.writableEnded) controller.abort()
+    })
+    const apiResponse = await requestDeepSeek(payload, controller.signal)
     if (!apiResponse.ok) {
+      const result = await apiResponse.json().catch(() => ({}))
       console.error('DeepSeek API error:', apiResponse.status, result?.error?.code)
       return sendJson(response, 502, { error: 'AI 服务暂时不可用，请稍后重试' })
     }
 
-    let answer = result.choices?.[0]?.message?.content?.trim()
+    response.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    })
+    response.flushHeaders()
+    const answer = await readDeepSeekStream(apiResponse.body, text => sendSse(response, 'delta', { text }))
     if (!answer) {
-      console.warn('DeepSeek returned empty content, retrying:', result.choices?.[0]?.finish_reason || 'unknown')
-      const retryPayload = {
-        ...payload,
-        messages: [...payload.messages, { role: 'user', content: '请直接输出对上一问题的最终中文答复，不要返回空内容。' }]
-      }
-      ;({ apiResponse, result } = await requestDeepSeek(retryPayload))
-      if (!apiResponse.ok) {
-        console.error('DeepSeek retry error:', apiResponse.status, result?.error?.code)
-        return sendJson(response, 502, { error: 'AI 服务暂时不可用，请稍后重试' })
-      }
-      answer = result.choices?.[0]?.message?.content?.trim()
+      sendSse(response, 'error', { error: 'AI 未返回回答，请重新发送问题' })
+      return response.end()
     }
-
-    if (!answer) return sendJson(response, 502, { error: 'AI 连续两次未返回回答，请重新发送问题' })
     const verification = verifyGeneratedAnswer(answer, matches)
-    answer = verification.answer
-    return sendJson(response, 200, {
-      answer,
-      model: result.model || model,
+    sendSse(response, 'done', {
+      answer: verification.answer,
+      model,
       conversationId,
       agent: {
         intent: agent.state.intent,
@@ -203,9 +206,16 @@ async function handleChat(request, response) {
         }
       }))
     })
+    return response.end()
   } catch (error) {
     console.error('Chat request failed:', error?.name)
+    if (response.headersSent) {
+      sendSse(response, 'error', { error: '连接 AI 服务失败，请稍后重试' })
+      return response.end()
+    }
     return sendJson(response, 502, { error: '连接 AI 服务失败，请稍后重试' })
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -233,8 +243,21 @@ async function serveStatic(request, response) {
   }
 }
 
+async function handleKnowledgeUpload(request, response) {
+  if (!knowledgeDatabase?.ingest) return sendJson(response, 503, { error: '知识库数据库尚未连接' })
+  try {
+    const document = await parseKnowledgeUpload(request)
+    const result = await knowledgeDatabase.ingest(document)
+    return sendJson(response, 201, result)
+  } catch (error) {
+    console.error('Knowledge upload failed:', error.message)
+    return sendJson(response, 400, { error: error.message || '知识资料上传失败' })
+  }
+}
+
 createServer(async (request, response) => {
   if (request.method === 'POST' && request.url === '/api/chat') return handleChat(request, response)
+  if (request.method === 'POST' && request.url === '/api/knowledge/upload') return handleKnowledgeUpload(request, response)
   if (request.method === 'GET' && request.url === '/api/health') {
     const database = knowledgeDatabase ? await knowledgeDatabase.health() : { connected: false, documents: 0, vectorEnabled: false }
     return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.DEEPSEEK_API_KEY), model, knowledgeDocuments: knowledgeDocuments.length, database, reranker: { enabled: knowledgeReranker.enabled, model: knowledgeReranker.model }, agentTools: agentToolDefinitions })
